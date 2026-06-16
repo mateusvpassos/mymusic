@@ -33,7 +33,9 @@ class ChordShapes {
   };
 
   static String _quality(String q) {
-    if (q.contains('maj7') || q.contains('M7')) return 'maj7';
+    if (q.contains('maj7') || q.contains('M7') || q.contains('7M') || q.contains('7+')) {
+      return 'maj7';
+    }
     if (q.startsWith('m') && !q.startsWith('maj')) {
       return q.contains('7') ? 'm7' : 'm';
     }

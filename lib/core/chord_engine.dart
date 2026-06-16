@@ -92,23 +92,32 @@ class ChordEngine {
 
   // ---- Importador flexível: aceita ChordPro [C]letra OU cifra
   // "acorde acima da letra" (formato Cifra Club). Detecta seção [Intro]/#.
+  // aceita sufixos em qualquer ordem: G7M, D9, D4, G7+, B7(4/9), A/C#, Cmaj7...
   static final _chordTok = RegExp(
-      r'^[A-G][#b]?(?:m|maj|min|M|dim|aug|sus|add|º|°)?[0-9]*'
-      r'(?:\([^)]*\))?(?:sus[0-9]*|add[0-9]*|[#b][0-9]+)*(?:/[A-G][#b]?)?$');
+      r'^[A-G][#b]?(?:maj|min|m|M|dim|aug|sus|add|º|°|[0-9]+|[+\-]|[#b][0-9]+|\([^)]*\)|/[A-G][#b]?)*$');
 
   static bool _isChord(String t) => t.isNotEmpty && _chordTok.hasMatch(t);
+
+  // remove parêntese DESBALANCEADO: "(D9"->"D9", "D4)"->"D4"; mantém "B7(4/9)", "A7(13)".
+  static String _fixParens(String t) {
+    if (t.startsWith('(') && !t.contains(')')) t = t.substring(1);
+    if (t.endsWith(')') && !t.substring(0, t.length - 1).contains('(')) {
+      t = t.substring(0, t.length - 1);
+    }
+    return t;
+  }
 
   static bool _isChordLine(String line) {
     final toks = RegExp(r'\S+').allMatches(line).map((m) => m.group(0)!).toList();
     if (toks.isEmpty) return false;
-    return toks.every(_isChord);
+    return toks.every((t) => _isChord(_fixParens(t)));
   }
 
   static SongLine _mergeChordLyric(String chordLine, String lyric) {
     final chords = <Chord>[];
     int maxCol = 0;
     for (final m in RegExp(r'\S+').allMatches(chordLine)) {
-      chords.add(Chord(m.group(0)!, m.start));
+      chords.add(Chord(_fixParens(m.group(0)!), m.start));
       if (m.start > maxCol) maxCol = m.start;
     }
     var lyr = lyric;

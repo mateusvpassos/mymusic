@@ -35,6 +35,26 @@ void main() {
     expect(lyrLine.chords.any((c) => c.sym == 'F#m7'), true);
   });
 
+  test('import recognizes G7M and parenthesized chords', () {
+    const t = '        G7M\n'
+        'É digno que a esposa\n'
+        '\n'
+        'D  (D9 D4)\n'
+        'qualquer letra\n';
+    final secs = ChordEngine.importText(t);
+    final all = secs.expand((s) => s.lines).expand((l) => l.chords).map((c) => c.sym).toList();
+    expect(all.contains('G7M'), true);
+    expect(all.contains('D9'), true);
+    expect(all.contains('D4'), true);
+    // parêntese desbalanceado removido
+    expect(all.any((c) => c.contains('(') || c.contains(')')), false);
+  });
+
+  test('balanced parens chord stays intact', () {
+    final l = ChordEngine.importText('B7(4/9)\nletra').expand((s) => s.lines).first;
+    expect(l.chords.first.sym, 'B7(4/9)');
+  });
+
   test('transpose minor key label', () {
     final s = Song(id: '1', title: 't', key: 'Bm', sections: [
       Section('', [ChordEngine.parseLine('[Bm]a [B7]b')]),
