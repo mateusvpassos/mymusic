@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/chord_engine.dart';
 import '../core/chord_shapes.dart';
+import '../core/image_export.dart';
 import '../core/pdf_export.dart';
 import '../core/pedal.dart';
 import '../data/store.dart';
@@ -245,10 +246,19 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                   ],
                 ),
                 actions: [
-                  IconButton(
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    tooltip: 'PDF / Imprimir',
-                    onPressed: () => PdfExport.printOrShare(shown),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.ios_share),
+                    tooltip: 'Exportar',
+                    onSelected: (v) {
+                      if (v == 'pdf') PdfExport.printOrShare(shown);
+                      if (v == 'img') {
+                        ImageExport.shareImage(shown, chordColor: scheme.primary);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'pdf', child: Text('PDF / Imprimir')),
+                      PopupMenuItem(value: 'img', child: Text('Imagem (PNG)')),
+                    ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.fullscreen),
