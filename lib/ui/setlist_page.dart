@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/image_export.dart';
+import '../core/text_export.dart';
 import '../data/store.dart';
 import '../models/song.dart';
 import 'song_view_page.dart';
+
+Color _strong(int seed) {
+  final hsl = HSLColor.fromColor(Color(seed));
+  return hsl
+      .withSaturation((hsl.saturation * 1.25).clamp(0.85, 1.0))
+      .withLightness(0.42)
+      .toColor();
+}
 
 class SetlistPage extends StatelessWidget {
   final String setlistId;
@@ -16,7 +26,31 @@ class SetlistPage extends StatelessWidget {
     final songs = sl.songIds.map((id) => st.songById(id)).whereType<Song>().toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(sl.name)),
+      appBar: AppBar(
+        title: Text(sl.name),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Exportar',
+            enabled: songs.isNotEmpty,
+            onSelected: (v) {
+              if (v == 'img') {
+                ImageExport.shareSetlist(
+                  sl.name,
+                  songs.map((s) => s.title).toList(),
+                  chordColor: _strong(st.settings.seedColor),
+                );
+              } else if (v == 'txt') {
+                TextExport.shareSetlistLyrics(sl.name, songs);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'img', child: Text('Imagem da lista')),
+              PopupMenuItem(value: 'txt', child: Text('Letras (TXT) — cantores')),
+            ],
+          ),
+        ],
+      ),
       body: songs.isEmpty
           ? Center(
               child: Text('Vazio — adicione músicas',

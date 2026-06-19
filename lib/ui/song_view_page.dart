@@ -261,11 +261,14 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     tooltip: 'Exportar',
                     onSelected: (v) {
                       final strong = _strongColor();
+                      final prefix =
+                          widget.setlistId != null ? '${_idx + 1}. ' : '';
                       if (v == 'pdf') {
-                        PdfExport.printOrShare(shown, colorArgb: strong.toARGB32());
+                        PdfExport.printOrShare(shown,
+                            colorArgb: strong.toARGB32(), namePrefix: prefix);
                       }
                       if (v == 'img') {
-                        ImageExport.shareImage(shown, chordColor: strong);
+                        ImageExport.shareImage(shown, chordColor: strong, namePrefix: prefix);
                       }
                     },
                     itemBuilder: (_) => const [

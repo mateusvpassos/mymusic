@@ -20,8 +20,23 @@ class ImageExport {
         textScaler: TextScaler.noScaling,
       )..layout();
 
+  static String _sanitize(String s) =>
+      s.replaceAll(RegExp(r'[^\w\s.-]'), '').trim();
+
+  static Future<void> _save(ui.Image img, String name, String subject) async {
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) return;
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${_sanitize(name)}.png');
+    await file.writeAsBytes(bytes.buffer.asUint8List());
+    await Share.shareXFiles([XFile(file.path)], subject: subject);
+  }
+
   static Future<void> shareImage(Song song,
-      {required Color chordColor, double fontSize = 22, double scale = 3}) async {
+      {required Color chordColor,
+      double fontSize = 22,
+      double scale = 3,
+      String namePrefix = ''}) async {
     const black = Color(0xFF111111);
     final lyricStyle = TextStyle(
         fontFamily: 'ChordMono', fontSize: fontSize, height: 1.25, color: black);
@@ -105,13 +120,51 @@ class ImageExport {
       op.p.paint(canvas, Offset(op.x, op.y));
     }
     final img = await recorder.endRecording().toImage((w * scale).ceil(), (h * scale).ceil());
-    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
-    if (bytes == null) return;
+    await _save(img, '$namePrefix${song.title}', song.title);
+  }
 
-    final dir = await getTemporaryDirectory();
-    final safe = song.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-    final file = File('${dir.path}/$safe.png');
-    await file.writeAsBytes(bytes.buffer.asUint8List());
-    await Share.shareXFiles([XFile(file.path)], subject: song.title);
+  /// Imagem da lista de músicas do repertório (título + lista numerada).
+  static Future<void> shareSetlist(String name, List<String> titles,
+      {required Color chordColor, double fontSize = 26, double scale = 3}) async {
+    const black = Color(0xFF111111);
+    final titleStyle = TextStyle(
+        fontFamily: 'ChordMono',
+        fontSize: fontSize * 1.3,
+        fontWeight: FontWeight.w800,
+        color: chordColor);
+    final itemStyle = TextStyle(fontFamily: 'ChordMono', fontSize: fontSize, color: black);
+    final numStyle = TextStyle(
+        fontFamily: 'ChordMono', fontSize: fontSize, fontWeight: FontWeight.w800, color: chordColor);
+
+    const padX = 36.0, padY = 32.0;
+    double y = padY, maxRight = 0;
+    final ops = <_Op>[];
+    void place(String t, TextStyle s, double x) {
+      final p = _tp(t.isEmpty ? ' ' : t, s);
+      ops.add(_Op(x, y, p));
+      maxRight = max(maxRight, x + p.width);
+    }
+
+    place(name, titleStyle, padX);
+    y += titleStyle.fontSize! * 1.7;
+
+    final numW = _tp('${titles.length}.  ', numStyle).width;
+    for (var i = 0; i < titles.length; i++) {
+      place('${i + 1}.', numStyle, padX);
+      place(titles[i], itemStyle, padX + numW);
+      y += itemStyle.fontSize! * 1.55;
+    }
+
+    final w = maxRight + padX;
+    final h = y + padY - itemStyle.fontSize! * 0.4;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(scale);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), Paint()..color = const Color(0xFFFFFFFF));
+    for (final op in ops) {
+      op.p.paint(canvas, Offset(op.x, op.y));
+    }
+    final img = await recorder.endRecording().toImage((w * scale).ceil(), (h * scale).ceil());
+    await _save(img, name, name);
   }
 }

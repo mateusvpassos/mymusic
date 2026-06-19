@@ -41,7 +41,7 @@ class PdfExport {
     return rows;
   }
 
-  static Future<void> printOrShare(Song song, {int? colorArgb}) async {
+  static Future<void> printOrShare(Song song, {int? colorArgb, String namePrefix = ''}) async {
     final reg = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
     final bold = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Bold.ttf'));
     final chordColor = PdfColor.fromInt(colorArgb ?? 0xFF1A3FB8);
@@ -156,6 +156,6 @@ class PdfExport {
       ),
     ));
 
-    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: '${song.title}.pdf');
+    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: '$namePrefix${song.title}.pdf');
   }
 }
