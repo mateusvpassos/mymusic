@@ -74,7 +74,8 @@ class ChordChart extends StatelessWidget {
   }
 
   Widget _chordWidget(String sym, TextStyle chord) {
-    final t = Text(sym, style: chord, maxLines: 1, softWrap: false);
+    final t = Text(sym, style: chord, maxLines: 1, softWrap: false,
+        textScaler: TextScaler.noScaling);
     if (onTapChord == null) return t;
     return GestureDetector(onTap: () => onTapChord!(sym), child: t);
   }
@@ -100,7 +101,8 @@ class ChordChart extends StatelessWidget {
             ),
           ),
         Text(line.lyric.isEmpty ? ' ' : line.lyric,
-            style: lyric, maxLines: 1, softWrap: false, overflow: TextOverflow.clip),
+            style: lyric, maxLines: 1, softWrap: false,
+            overflow: TextOverflow.clip, textScaler: TextScaler.noScaling),
       ],
     );
     return ClipRect(child: content);

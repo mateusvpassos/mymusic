@@ -706,6 +706,7 @@ class _EditableLineState extends State<_EditableLine> {
                 style: _lyricStyle,
                 maxLines: 1,
                 softWrap: false,
+                textScaler: TextScaler.noScaling,
               ),
             ],
           ),
