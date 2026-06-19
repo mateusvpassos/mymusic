@@ -18,9 +18,8 @@ class TextExport {
       if (s.artist.isNotEmpty) b.writeln(s.artist);
       b.writeln();
       for (final sec in s.sections) {
-        if (sec.name.isNotEmpty) b.writeln('[${sec.name}]');
         for (final line in sec.lines) {
-          // só linhas com letra de verdade (pula linhas só de acordes)
+          // só linhas com letra de verdade (pula acordes e nomes de seção)
           if (line.lyric.trim().isNotEmpty) b.writeln(line.lyric);
         }
         b.writeln();
