@@ -189,6 +189,16 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     );
   }
 
+  // versão forte/escura da cor do tema, p/ marcar bem em fundo branco (PDF/imagem)
+  Color _strongColor() {
+    final st = context.read<AppState>();
+    final hsl = HSLColor.fromColor(Color(st.settings.seedColor));
+    return hsl
+        .withSaturation((hsl.saturation * 1.25).clamp(0.85, 1.0))
+        .withLightness(0.42)
+        .toColor();
+  }
+
   void _setFont(double delta) {
     final st = context.read<AppState>();
     st.updateSettings(
@@ -250,9 +260,12 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     icon: const Icon(Icons.ios_share),
                     tooltip: 'Exportar',
                     onSelected: (v) {
-                      if (v == 'pdf') PdfExport.printOrShare(shown);
+                      final strong = _strongColor();
+                      if (v == 'pdf') {
+                        PdfExport.printOrShare(shown, colorArgb: strong.toARGB32());
+                      }
                       if (v == 'img') {
-                        ImageExport.shareImage(shown, chordColor: scheme.primary);
+                        ImageExport.shareImage(shown, chordColor: strong);
                       }
                     },
                     itemBuilder: (_) => const [

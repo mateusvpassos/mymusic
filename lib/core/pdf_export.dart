@@ -41,10 +41,10 @@ class PdfExport {
     return rows;
   }
 
-  static Future<void> printOrShare(Song song) async {
+  static Future<void> printOrShare(Song song, {int? colorArgb}) async {
     final reg = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
     final bold = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Bold.ttf'));
-    final chordColor = PdfColor.fromInt(0xFF1A3FB8);
+    final chordColor = PdfColor.fromInt(colorArgb ?? 0xFF1A3FB8);
 
     final rows = _rows(song);
     final maxLen = rows
