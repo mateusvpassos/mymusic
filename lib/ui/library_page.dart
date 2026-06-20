@@ -102,17 +102,66 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
 
   Widget _songCard(AppState st, Song s) {
     final scheme = Theme.of(context).colorScheme;
+    final meta = <String>[
+      if (s.artist.isNotEmpty) s.artist,
+      if (s.bpm > 0) '${s.bpm} BPM',
+    ].join('  •  ');
     return Card(
       child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        contentPadding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
         title: Text(s.title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        subtitle: s.artist.isEmpty ? null : Text(s.artist),
-        leading: CircleAvatar(
-          backgroundColor: scheme.primaryContainer,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        subtitle: (meta.isEmpty && s.tags.isEmpty)
+            ? null
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (meta.isNotEmpty)
+                    Text(meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: scheme.onSurfaceVariant)),
+                  if (s.tags.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: s.tags
+                            .take(4)
+                            .map((t) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: scheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(t,
+                                      style: TextStyle(
+                                          fontSize: 11, color: scheme.onSurfaceVariant)),
+                                ))
+                            .toList(),
+                      ),
+                    ),
+                ],
+              ),
+        leading: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [scheme.primary, scheme.tertiary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          alignment: Alignment.center,
           child: Text(s.key,
-              style: TextStyle(
-                  color: scheme.onPrimaryContainer, fontWeight: FontWeight.w700)),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (v) {
