@@ -101,6 +101,13 @@ class MyApp extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
               ),
               dividerTheme: DividerThemeData(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+              popupMenuTheme: PopupMenuThemeData(
+                color: scheme.surfaceContainerHigh,
+                surfaceTintColor: Colors.transparent,
+                elevation: 8,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500, fontSize: 15),
+              ),
             ),
             home: const LibraryPage(),
           );

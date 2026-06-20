@@ -8,6 +8,56 @@ import 'song_edit_page.dart';
 import 'setlist_page.dart';
 import 'settings_page.dart';
 
+/// Botão "pílula" com gradiente (usado como FAB).
+class _GradientButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _GradientButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [scheme.primary, scheme.tertiary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: scheme.primary.withValues(alpha: 0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white, size: 22),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
   @override
@@ -32,7 +82,18 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MyMusic', style: TextStyle(fontWeight: FontWeight.w700)),
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.asset('assets/icon/icon.png', width: 32, height: 32),
+            ),
+            const SizedBox(width: 10),
+            const Text('MyMusic'),
+          ],
+        ),
         bottom: TabBar(
           controller: _tab,
           tabs: const [Tab(text: 'Músicas'), Tab(text: 'Repertórios')],
@@ -74,10 +135,10 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
       ),
       floatingActionButton: AnimatedBuilder(
         animation: _tab,
-        builder: (_, __) => FloatingActionButton.extended(
-          onPressed: () => _tab.index == 0 ? _newSong(st) : _newSetlist(st),
-          icon: const Icon(Icons.add),
-          label: Text(_tab.index == 0 ? 'Música' : 'Repertório'),
+        builder: (_, __) => _GradientButton(
+          icon: Icons.add,
+          label: _tab.index == 0 ? 'Música' : 'Repertório',
+          onTap: () => _tab.index == 0 ? _newSong(st) : _newSetlist(st),
         ),
       ),
     );
