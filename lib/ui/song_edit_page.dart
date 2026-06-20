@@ -25,6 +25,7 @@ class _SongEditPageState extends State<SongEditPage> {
   late TextEditingController _artist;
   late TextEditingController _key;
   late TextEditingController _text;
+  late TextEditingController _notes;
   int _mode = 0; // 0 = Acordes (visual), 1 = Texto
   final List<String> _undo = [];
   String _current = '';
@@ -45,6 +46,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _artist = TextEditingController(text: _song.artist);
     _key = TextEditingController(text: _song.key);
     _text = TextEditingController(text: ChordEngine.serializeSections(_song.sections));
+    _notes = TextEditingController(text: _song.notes);
     _current = ChordEngine.serializeSections(_song.sections);
   }
 
@@ -70,6 +72,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _artist.dispose();
     _key.dispose();
     _text.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -78,6 +81,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _song.title = _title.text.trim().isEmpty ? 'Sem título' : _title.text.trim();
     _song.artist = _artist.text.trim();
     _song.key = _key.text.trim().isEmpty ? 'C' : _key.text.trim();
+    _song.notes = _notes.text.trim();
     context.read<AppState>().upsertSong(_song);
     Navigator.pop(context);
   }
@@ -279,6 +283,18 @@ class _SongEditPageState extends State<SongEditPage> {
                 onPressed: _addTag,
               ),
             ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _notes,
+            maxLines: 2,
+            minLines: 1,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              hintText: 'Anotações (ex.: entra suave, repete 2x)',
+              isDense: true,
+              prefixIcon: Icon(Icons.sticky_note_2_outlined, size: 18),
+            ),
           ),
         ],
       ),

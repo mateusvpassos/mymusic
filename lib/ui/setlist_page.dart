@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/image_export.dart';
+import '../core/pdf_export.dart';
 import '../core/text_export.dart';
 import '../data/store.dart';
 import '../models/song.dart';
 import 'song_view_page.dart';
+
+String _fmtDate(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
 Color _strong(int seed) {
   final hsl = HSLColor.fromColor(Color(seed));
@@ -27,8 +31,33 @@ class SetlistPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(sl.name),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(sl.name),
+            if (sl.date != null)
+              Text(_fmtDate(sl.date!),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+          ],
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.event),
+            tooltip: 'Data do evento',
+            onPressed: () async {
+              final d = await showDatePicker(
+                context: context,
+                initialDate: sl.date ?? DateTime.now(),
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              );
+              if (d != null) {
+                sl.date = d;
+                st.upsertSetlist(sl);
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.play_circle_fill),
             tooltip: 'Iniciar',
@@ -58,9 +87,13 @@ class SetlistPage extends StatelessWidget {
                 );
               } else if (v == 'txt') {
                 TextExport.shareSetlistLyrics(sl.name, songs);
+              } else if (v == 'pdf') {
+                PdfExport.printSetlist(sl.name, songs,
+                    colorArgb: _strong(st.settings.seedColor).toARGB32());
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'pdf', child: Text('PDF (todas as cifras)')),
               PopupMenuItem(value: 'img', child: Text('Imagem da lista')),
               PopupMenuItem(value: 'txt', child: Text('Letras (TXT) — cantores')),
             ],

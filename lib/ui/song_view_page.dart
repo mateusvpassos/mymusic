@@ -331,6 +331,26 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         body: Column(
           children: [
             if (!_full && uniqueChords.isNotEmpty) _chordBar(uniqueChords, scheme),
+            if (!_full && base.notes.isNotEmpty)
+              Container(
+                width: double.infinity,
+                color: scheme.secondaryContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.sticky_note_2_outlined,
+                        size: 16, color: scheme.onSecondaryContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(base.notes,
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic,
+                              color: scheme.onSecondaryContainer)),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: Stack(
           children: [

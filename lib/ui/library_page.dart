@@ -137,21 +137,33 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
     );
   }
 
+  static String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
   Widget _setlistsTab(AppState st) {
     if (st.setlists.isEmpty) return _empty('Nenhum repertório', Icons.queue_music);
+    // com data primeiro (mais recente no topo), depois sem data
+    final list = [...st.setlists]..sort((a, b) {
+        if (a.date != null && b.date != null) return b.date!.compareTo(a.date!);
+        if (a.date != null) return -1;
+        if (b.date != null) return 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
-      itemCount: st.setlists.length,
+      itemCount: list.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        final sl = st.setlists[i];
+        final sl = list[i];
         return Card(
           child: ListTile(
             contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             leading: const Icon(Icons.queue_music),
             title: Text(sl.name,
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-            subtitle: Text('${sl.songIds.length} músicas'),
+            subtitle: Text(sl.date != null
+                ? '${_fmtDate(sl.date!)}  •  ${sl.songIds.length} músicas'
+                : '${sl.songIds.length} músicas'),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'dup') st.duplicateSetlist(sl);

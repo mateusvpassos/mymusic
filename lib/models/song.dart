@@ -47,6 +47,7 @@ class Song {
   int capo;
   List<Section> sections;
   List<String> tags;
+  String notes; // anotações pessoais (ex.: "entra suave", "repete 2x")
   DateTime updatedAt;
 
   Song({
@@ -57,6 +58,7 @@ class Song {
     this.capo = 0,
     List<Section>? sections,
     List<String>? tags,
+    this.notes = '',
     DateTime? updatedAt,
   })  : sections = sections ?? [],
         tags = tags ?? [],
@@ -70,6 +72,7 @@ class Song {
         'capo': capo,
         'sections': sections.map((s) => s.toJson()).toList(),
         'tags': tags,
+        'notes': notes,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -83,6 +86,7 @@ class Song {
             .map((e) => Section.fromJson(e as Map<String, dynamic>))
             .toList(),
         tags: (j['tags'] as List? ?? []).map((e) => e as String).toList(),
+        notes: (j['notes'] ?? '') as String,
         updatedAt: DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
       );
 
@@ -94,6 +98,7 @@ class Song {
         capo: capo,
         sections: sections.map((s) => s.copy()).toList(),
         tags: List.of(tags),
+        notes: notes,
         updatedAt: updatedAt,
       );
 }
@@ -103,6 +108,7 @@ class Setlist {
   String name;
   List<String> songIds;
   Map<String, int> transpose; // songId -> semitons (tom salvo no repertório)
+  DateTime? date; // data do evento (opcional)
   DateTime updatedAt;
 
   Setlist({
@@ -110,6 +116,7 @@ class Setlist {
     required this.name,
     List<String>? songIds,
     Map<String, int>? transpose,
+    this.date,
     DateTime? updatedAt,
   })  : songIds = songIds ?? [],
         transpose = transpose ?? {},
@@ -120,6 +127,7 @@ class Setlist {
         'name': name,
         'songIds': songIds,
         'transpose': transpose,
+        'date': date?.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -129,6 +137,9 @@ class Setlist {
         songIds: (j['songIds'] as List? ?? []).map((e) => e as String).toList(),
         transpose: (j['transpose'] as Map? ?? {})
             .map((k, v) => MapEntry(k as String, (v as num).toInt())),
+        date: (j['date'] != null && (j['date'] as String).isNotEmpty)
+            ? DateTime.tryParse(j['date'] as String)
+            : null,
         updatedAt: DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
       );
 }
