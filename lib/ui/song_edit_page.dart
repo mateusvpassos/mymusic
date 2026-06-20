@@ -26,6 +26,8 @@ class _SongEditPageState extends State<SongEditPage> {
   late TextEditingController _key;
   late TextEditingController _text;
   late TextEditingController _notes;
+  late TextEditingController _bpm;
+  final List<DateTime> _taps = [];
   int _mode = 0; // 0 = Acordes (visual), 1 = Texto
   final List<String> _undo = [];
   String _current = '';
@@ -47,6 +49,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _key = TextEditingController(text: _song.key);
     _text = TextEditingController(text: ChordEngine.serializeSections(_song.sections));
     _notes = TextEditingController(text: _song.notes);
+    _bpm = TextEditingController(text: _song.bpm > 0 ? '${_song.bpm}' : '');
     _current = ChordEngine.serializeSections(_song.sections);
   }
 
@@ -73,6 +76,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _key.dispose();
     _text.dispose();
     _notes.dispose();
+    _bpm.dispose();
     super.dispose();
   }
 
@@ -82,6 +86,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _song.artist = _artist.text.trim();
     _song.key = _key.text.trim().isEmpty ? 'C' : _key.text.trim();
     _song.notes = _notes.text.trim();
+    _song.bpm = int.tryParse(_bpm.text.trim()) ?? 0;
     context.read<AppState>().upsertSong(_song);
     Navigator.pop(context);
   }
@@ -211,6 +216,24 @@ class _SongEditPageState extends State<SongEditPage> {
     );
   }
 
+  void _tapTempo() {
+    final now = DateTime.now();
+    if (_taps.isNotEmpty && now.difference(_taps.last).inMilliseconds > 2000) {
+      _taps.clear();
+    }
+    _taps.add(now);
+    if (_taps.length >= 2) {
+      final intervals = <int>[];
+      for (var i = 1; i < _taps.length; i++) {
+        intervals.add(_taps[i].difference(_taps[i - 1]).inMilliseconds);
+      }
+      final avg = intervals.reduce((a, b) => a + b) / intervals.length;
+      final bpm = (60000 / avg).round();
+      setState(() => _bpm.text = '$bpm');
+    }
+    if (_taps.length > 6) _taps.removeAt(0);
+  }
+
   void _addTag() async {
     final ctrl = TextEditingController();
     final t = await showDialog<String>(
@@ -295,6 +318,25 @@ class _SongEditPageState extends State<SongEditPage> {
               isDense: true,
               prefixIcon: Icon(Icons.sticky_note_2_outlined, size: 18),
             ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              SizedBox(
+                width: 110,
+                child: TextField(
+                  controller: _bpm,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'BPM', isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _tapTempo,
+                icon: const Icon(Icons.touch_app, size: 18),
+                label: const Text('Tap tempo'),
+              ),
+            ],
           ),
         ],
       ),

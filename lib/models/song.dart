@@ -48,6 +48,7 @@ class Song {
   List<Section> sections;
   List<String> tags;
   String notes; // anotações pessoais (ex.: "entra suave", "repete 2x")
+  int bpm; // 0 = sem BPM
   DateTime updatedAt;
 
   Song({
@@ -59,6 +60,7 @@ class Song {
     List<Section>? sections,
     List<String>? tags,
     this.notes = '',
+    this.bpm = 0,
     DateTime? updatedAt,
   })  : sections = sections ?? [],
         tags = tags ?? [],
@@ -73,6 +75,7 @@ class Song {
         'sections': sections.map((s) => s.toJson()).toList(),
         'tags': tags,
         'notes': notes,
+        'bpm': bpm,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -87,6 +90,7 @@ class Song {
             .toList(),
         tags: (j['tags'] as List? ?? []).map((e) => e as String).toList(),
         notes: (j['notes'] ?? '') as String,
+        bpm: (j['bpm'] ?? 0) as int,
         updatedAt: DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
       );
 
@@ -99,6 +103,7 @@ class Song {
         sections: sections.map((s) => s.copy()).toList(),
         tags: List.of(tags),
         notes: notes,
+        bpm: bpm,
         updatedAt: updatedAt,
       );
 }

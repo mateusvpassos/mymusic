@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +37,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   bool _full = false;
   bool _capo = true; // aplica capotraste de verdade nos acordes mostrados
   int _dir = 1; // direção da última troca (1 = próxima, -1 = anterior)
+  Timer? _metro;
   late final Ticker _ticker;
   Duration _last = Duration.zero;
 
@@ -241,6 +243,24 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         (s) => s.fontScale = (s.fontScale + delta).clamp(0.7, 2.8));
   }
 
+  void _toggleMetro(int bpm) {
+    if (_metro != null) {
+      _metro!.cancel();
+      setState(() => _metro = null);
+      return;
+    }
+    if (bpm <= 0) return;
+    void tick() {
+      SystemSound.play(SystemSoundType.click);
+      HapticFeedback.lightImpact();
+    }
+    tick();
+    setState(() {
+      _metro = Timer.periodic(
+          Duration(milliseconds: (60000 / bpm).round()), (_) => tick());
+    });
+  }
+
   void _toggleFull() {
     setState(() => _full = !_full);
     SystemChrome.setEnabledSystemUIMode(
@@ -250,6 +270,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _metro?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WakelockPlus.disable();
     _ticker.dispose();
@@ -289,6 +310,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                       '${shown.key}'
                       '${base.capo > 0 ? '  •  capo ${base.capo}${_capo ? '' : ' (off)'}' : ''}'
                       '${_transpose != 0 ? '  •  ${_transpose > 0 ? '+' : ''}$_transpose' : ''}'
+                      '${base.bpm > 0 ? '  •  ${base.bpm} BPM' : ''}'
                       '${_hasNav ? '  •  ${_idx + 1}/${_list.length}' : ''}',
                       style: TextStyle(fontSize: 12, color: scheme.primary),
                     ),
@@ -482,6 +504,13 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                 tooltip: 'Auto-rolagem',
                 onPressed: _toggleAuto,
               ),
+              if (base.bpm > 0)
+                IconButton(
+                  isSelected: _metro != null,
+                  icon: Icon(_metro != null ? Icons.av_timer : Icons.av_timer_outlined),
+                  tooltip: 'Metrônomo ${base.bpm}',
+                  onPressed: () => _toggleMetro(base.bpm),
+                ),
               _tb(Icons.fullscreen, 'Tela cheia', _toggleFull),
               if (_hasNav)
                 _tb(Icons.skip_next, 'Próxima música',
