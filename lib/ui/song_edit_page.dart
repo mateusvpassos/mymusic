@@ -260,14 +260,16 @@ class _SongEditPageState extends State<SongEditPage> {
 
   Widget _meta(ColorScheme scheme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
             controller: _title,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             decoration: const InputDecoration(hintText: 'Título', isDense: true),
           ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -287,7 +289,7 @@ class _SongEditPageState extends State<SongEditPage> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 6,
             runSpacing: 4,
