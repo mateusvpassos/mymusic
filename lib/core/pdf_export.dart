@@ -158,4 +158,72 @@ class PdfExport {
 
     await Printing.layoutPdf(onLayout: (_) => doc.save(), name: '$namePrefix${song.title}.pdf');
   }
+
+  /// PDF do repertório inteiro: capa (lista numerada) + cada cifra em páginas próprias.
+  static Future<void> printSetlist(String name, List<Song> songs, {int? colorArgb}) async {
+    final reg = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
+    final bold = pw.Font.ttf(await rootBundle.load('assets/fonts/JetBrainsMono-Bold.ttf'));
+    final chord = PdfColor.fromInt(colorArgb ?? 0xFF1A3FB8);
+    final doc = pw.Document();
+
+    pw.TextStyle st(int kind) {
+      if (kind == 0) {
+        return pw.TextStyle(font: bold, fontSize: 9, color: chord);
+      } else if (kind == 1) {
+        return pw.TextStyle(font: bold, fontSize: 10.5, color: chord);
+      }
+      return pw.TextStyle(font: reg, fontSize: 10.5);
+    }
+
+    // capa
+    doc.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      build: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(name, style: pw.TextStyle(font: bold, fontSize: 26, color: chord)),
+          pw.Divider(),
+          pw.SizedBox(height: 8),
+          ...List.generate(
+            songs.length,
+            (i) => pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4),
+              child: pw.Text('${i + 1}.  ${songs[i].title}',
+                  style: pw.TextStyle(font: reg, fontSize: 14)),
+            ),
+          ),
+        ],
+      ),
+    ));
+
+    // uma música por página (flui p/ próxima se for longa)
+    for (var i = 0; i < songs.length; i++) {
+      final song = songs[i];
+      doc.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        header: (_) => pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 6),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('${i + 1}. ${song.title}', style: pw.TextStyle(font: bold, fontSize: 15)),
+            pw.Text(
+              [
+                if (song.artist.isNotEmpty) song.artist,
+                'Tom: ${song.key}',
+                if (song.capo > 0) 'Capo ${song.capo}',
+              ].join('   •   '),
+              style: pw.TextStyle(font: reg, fontSize: 9, color: PdfColors.grey700),
+            ),
+            pw.Divider(),
+          ]),
+        ),
+        build: (_) => _rows(song)
+            .map((r) => pw.Text(r.text, style: st(r.kind), maxLines: 1, softWrap: false))
+            .toList(),
+      ));
+    }
+
+    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: '$name.pdf');
+  }
 }
