@@ -29,6 +29,22 @@ class SetlistPage extends StatelessWidget {
       appBar: AppBar(
         title: Text(sl.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.play_circle_fill),
+            tooltip: 'Iniciar culto',
+            onPressed: songs.isEmpty
+                ? null
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SongViewPage(
+                          songId: songs.first.id,
+                          setlistId: sl.id,
+                          setlistSongIds: List.of(sl.songIds),
+                        ),
+                      ),
+                    ),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
             tooltip: 'Exportar',

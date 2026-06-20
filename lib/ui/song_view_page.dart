@@ -34,6 +34,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   int _transpose = 0;
   bool _autoScroll = false;
   bool _full = false;
+  bool _capo = true; // aplica capotraste de verdade nos acordes mostrados
   int _dir = 1; // direção da última troca (1 = próxima, -1 = anterior)
   late final Ticker _ticker;
   Duration _last = Duration.zero;
@@ -199,6 +200,41 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         .toColor();
   }
 
+  List<String> _uniqueChords(Song song) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final sec in song.sections) {
+      for (final l in sec.lines) {
+        for (final c in l.chords) {
+          if (seen.add(c.sym)) out.add(c.sym);
+        }
+      }
+    }
+    return out;
+  }
+
+  Widget _chordBar(List<String> chords, ColorScheme scheme) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: chords.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) => ActionChip(
+          label: Text(chords[i],
+              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700)),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _showDiagram(chords[i]),
+        ),
+      ),
+    );
+  }
+
   void _setFont(double delta) {
     final st = context.read<AppState>();
     st.updateSettings(
@@ -229,9 +265,11 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     if (base == null) {
       return const Scaffold(body: Center(child: Text('Música não encontrada')));
     }
-    final shown = _transpose == 0 ? base : ChordEngine.transposeSong(base, _transpose);
+    final steps = _transpose - (_capo ? base.capo : 0);
+    final shown = steps == 0 ? base : ChordEngine.transposeSong(base, steps);
     final fontSize = 18.0 * st.settings.fontScale;
     final scheme = Theme.of(context).colorScheme;
+    final uniqueChords = _uniqueChords(shown);
 
     return Focus(
       focusNode: _focus,
@@ -248,7 +286,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     Text(base.title,
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
                     Text(
-                      '${shown.key}${base.capo > 0 ? '  •  capo ${base.capo}' : ''}'
+                      '${shown.key}'
+                      '${base.capo > 0 ? '  •  capo ${base.capo}${_capo ? '' : ' (off)'}' : ''}'
                       '${_transpose != 0 ? '  •  ${_transpose > 0 ? '+' : ''}$_transpose' : ''}'
                       '${_hasNav ? '  •  ${_idx + 1}/${_list.length}' : ''}',
                       style: TextStyle(fontSize: 12, color: scheme.primary),
@@ -289,7 +328,11 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                   ),
                 ],
               ),
-        body: Stack(
+        body: Column(
+          children: [
+            if (!_full && uniqueChords.isNotEmpty) _chordBar(uniqueChords, scheme),
+            Expanded(
+              child: Stack(
           children: [
             GestureDetector(
               onHorizontalDragEnd: _swipe,
@@ -346,6 +389,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                   ]),
                 ),
               ),
+                ],
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: _full ? null : _toolbar(st, base, scheme),
@@ -385,6 +431,13 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                 base.capo++;
                 st.upsertSong(base);
               }),
+              if (base.capo > 0)
+                IconButton(
+                  isSelected: _capo,
+                  icon: Icon(_capo ? Icons.album : Icons.album_outlined),
+                  tooltip: _capo ? 'Acordes com capo (ligado)' : 'Acordes com capo (desligado)',
+                  onPressed: () => setState(() => _capo = !_capo),
+                ),
               IconButton.filledTonal(
                 isSelected: _autoScroll,
                 icon: Icon(_autoScroll ? Icons.pause : Icons.play_arrow),
