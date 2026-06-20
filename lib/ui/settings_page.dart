@@ -24,95 +24,109 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _header('Aparência'),
-          SwitchListTile(
-            title: const Text('Tema escuro'),
-            value: s.dark,
-            onChanged: (v) => st.updateSettings((x) => x.dark = v),
-          ),
-          const SizedBox(height: 8),
-          const Text('Cor do tema'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final c in _seeds)
-                GestureDetector(
-                  onTap: () => st.updateSettings((x) => x.seedColor = c),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Color(c),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: s.seedColor == c ? scheme.onSurface : Colors.transparent,
-                        width: 3,
+          _card('Aparência', [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tema escuro'),
+              value: s.dark,
+              onChanged: (v) => st.updateSettings((x) => x.dark = v),
+            ),
+            const SizedBox(height: 4),
+            const Text('Cor do tema'),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final c in _seeds)
+                  GestureDetector(
+                    onTap: () => st.updateSettings((x) => x.seedColor = c),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Color(c),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: s.seedColor == c ? scheme.onSurface : Colors.transparent,
+                          width: 3,
+                        ),
                       ),
+                      child: s.seedColor == c
+                          ? const Icon(Icons.check, color: Colors.white)
+                          : null,
                     ),
-                    child: s.seedColor == c
-                        ? const Icon(Icons.check, color: Colors.white)
-                        : null,
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('Tamanho da letra: ${(s.fontScale * 100).round()}%'),
+            Slider(
+              min: 0.8,
+              max: 2.0,
+              divisions: 12,
+              value: s.fontScale,
+              label: '${(s.fontScale * 100).round()}%',
+              onChanged: (v) => st.updateSettings((x) => x.fontScale = v),
+            ),
+            Text('Velocidade auto-rolagem: ${s.scrollSpeed.round()}'),
+            Slider(
+              min: 8,
+              max: 80,
+              divisions: 18,
+              value: s.scrollSpeed,
+              label: s.scrollSpeed.round().toString(),
+              onChanged: (v) => st.updateSettings((x) => x.scrollSpeed = v),
+            ),
+          ]),
+          _card('Pedal', [
+            Text(
+              'Toque em "Gravar" e pressione a tecla do pedal. A maioria dos pedais '
+              'já funciona com os padrões (avançar/voltar).',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            _pedalRow(context, st, 'next', 'Avançar / rolar'),
+            _pedalRow(context, st, 'prev', 'Voltar'),
+          ]),
+          _card('Backup', [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Exportar (JSON)'),
+              subtitle: const Text('Copia tudo e salva arquivo'),
+              onTap: () => _export(context, st),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.download),
+              title: const Text('Importar (JSON)'),
+              subtitle: const Text('Cola o backup'),
+              onTap: () => _import(context, st),
+            ),
+          ]),
+          _card('Google Drive', [_drive(context, st)]),
           const SizedBox(height: 16),
-          Text('Tamanho da letra: ${(s.fontScale * 100).round()}%'),
-          Slider(
-            min: 0.8,
-            max: 2.0,
-            divisions: 12,
-            value: s.fontScale,
-            label: '${(s.fontScale * 100).round()}%',
-            onChanged: (v) => st.updateSettings((x) => x.fontScale = v),
-          ),
-          Text('Velocidade auto-rolagem: ${s.scrollSpeed.round()}'),
-          Slider(
-            min: 8,
-            max: 80,
-            divisions: 18,
-            value: s.scrollSpeed,
-            label: s.scrollSpeed.round().toString(),
-            onChanged: (v) => st.updateSettings((x) => x.scrollSpeed = v),
-          ),
-          const Divider(height: 32),
-          _header('Pedal'),
-          const Text(
-            'Toque em "Gravar" e pressione a tecla do pedal. A maioria dos pedais '
-            'já funciona com os padrões (avançar/voltar).',
-          ),
-          const SizedBox(height: 8),
-          _pedalRow(context, st, 'next', 'Avançar / rolar'),
-          _pedalRow(context, st, 'prev', 'Voltar'),
-          const Divider(height: 32),
-          _header('Backup'),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.upload_file),
-            title: const Text('Exportar (JSON)'),
-            subtitle: const Text('Copia tudo e salva arquivo'),
-            onTap: () => _export(context, st),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.download),
-            title: const Text('Importar (JSON)'),
-            subtitle: const Text('Cola o backup'),
-            onTap: () => _import(context, st),
-          ),
-          const Divider(height: 32),
-          _header('Google Drive'),
-          _drive(context, st),
-          const SizedBox(height: 24),
           Center(
-            child: Text('MyMusic v1', style: TextStyle(color: Theme.of(context).hintColor)),
+            child: Text('MyMusic', style: TextStyle(color: Theme.of(context).hintColor)),
           ),
         ],
       ),
     );
   }
+
+  Widget _card(String title, List<Widget> children) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [_header(title), ...children],
+            ),
+          ),
+        ),
+      );
 
   Widget _pedalRow(BuildContext context, AppState st, String action, String label) {
     final keys = Pedal.keysFor(st.settings, action);
