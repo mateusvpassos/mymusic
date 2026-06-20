@@ -363,6 +363,24 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                 ),
               ),
             ),
+            if (_autoScroll)
+              Positioned(
+                top: MediaQuery.of(context).size.height * 0.30,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: fontSize * 2.6,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.10),
+                      border: Border(
+                        top: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
+                        bottom: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             if (_full)
               Positioned(
                 top: 6,

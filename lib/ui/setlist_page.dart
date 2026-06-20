@@ -31,7 +31,7 @@ class SetlistPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.play_circle_fill),
-            tooltip: 'Iniciar culto',
+            tooltip: 'Iniciar',
             onPressed: songs.isEmpty
                 ? null
                 : () => Navigator.push(
