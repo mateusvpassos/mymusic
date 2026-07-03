@@ -215,7 +215,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     return out;
   }
 
-  Widget _chordBar(List<String> chords, ColorScheme scheme) {
+  Widget _chordBar(List<String> chords, ColorScheme scheme, Color chordColor) {
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -229,7 +229,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (_, i) => ActionChip(
           label: Text(chords[i],
-              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: chordColor, fontWeight: FontWeight.w700)),
           visualDensity: VisualDensity.compact,
           onPressed: () => _showDiagram(chords[i]),
         ),
@@ -290,6 +290,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     final shown = steps == 0 ? base : ChordEngine.transposeSong(base, steps);
     final fontSize = 18.0 * st.settings.fontScale;
     final scheme = Theme.of(context).colorScheme;
+    // modo claro: primary do M3 fica pastel — usa versão saturada/forte
+    final chordColor = st.settings.dark ? scheme.primary : _strongColor();
     final uniqueChords = _uniqueChords(shown);
 
     return Focus(
@@ -352,7 +354,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
               ),
         body: Column(
           children: [
-            if (!_full && uniqueChords.isNotEmpty) _chordBar(uniqueChords, scheme),
+            if (!_full && uniqueChords.isNotEmpty)
+              _chordBar(uniqueChords, scheme, chordColor),
             if (!_full && base.notes.isNotEmpty)
               Container(
                 width: double.infinity,
@@ -398,7 +401,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     child: ChordChart(
                       song: shown,
                       fontSize: fontSize,
-                      chordColor: scheme.primary,
+                      chordColor: chordColor,
                       onTapChord: _showDiagram,
                     ),
                   ),
