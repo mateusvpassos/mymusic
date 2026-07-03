@@ -16,8 +16,9 @@ class _Op {
 class _Block {
   final List<_Op> ops;
   final double h, w;
+  final int sec; // índice da seção — corte de coluna só em fronteira de seção
   final bool keepWithNext; // cabeçalho não pode ficar sozinho no fim da coluna
-  _Block(this.ops, this.h, this.w, {this.keepWithNext = false});
+  _Block(this.ops, this.h, this.w, this.sec, {this.keepWithNext = false});
 }
 
 /// Exporta a cifra como PNG do tamanho exato do conteúdo (fundo branco).
@@ -75,13 +76,15 @@ class ImageExport {
 
     // monta blocos (coords locais, x relativo ao início da coluna)
     final blocks = <_Block>[];
-    for (final sec in song.sections) {
+    for (var si = 0; si < song.sections.length; si++) {
+      final sec = song.sections[si];
       if (sec.name.isNotEmpty) {
         final p = _tp(sec.name.toUpperCase(), headerStyle);
         blocks.add(_Block(
           [_Op(0, fontSize * 0.5, p)],
           fontSize * 0.5 + headerStyle.fontSize! * 1.5,
           p.width,
+          si,
           keepWithNext: true,
         ));
       }
@@ -105,7 +108,7 @@ class ImageExport {
         ops.add(_Op(0, h, p));
         w = max(w, p.width);
         h += lyricH;
-        blocks.add(_Block(ops, h, w));
+        blocks.add(_Block(ops, h, w, si));
       }
     }
 
@@ -120,18 +123,35 @@ class ImageExport {
       colBlocks[0].addAll(blocks);
     } else {
       final target = contentH / 2;
+      // 1º: só fronteiras de seção — escolhe a mais equilibrada
+      int split = -1;
+      double bestDiff = double.infinity;
       double acc = 0;
-      int split = blocks.length;
-      for (var i = 0; i < blocks.length; i++) {
+      for (var i = 0; i < blocks.length - 1; i++) {
         acc += blocks[i].h;
-        if (acc >= target) {
-          split = i + 1;
-          break;
+        if (blocks[i + 1].sec != blocks[i].sec) {
+          final diff = (acc - target).abs();
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            split = i + 1;
+          }
         }
       }
-      // não deixa header órfão no fim da 1ª coluna
-      while (split > 1 && blocks[split - 1].keepWithNext) {
-        split--;
+      // fallback: seção única enorme / fronteira muito desequilibrada -> corta por linha
+      if (split < 0 || bestDiff > contentH * 0.35) {
+        acc = 0;
+        split = blocks.length;
+        for (var i = 0; i < blocks.length; i++) {
+          acc += blocks[i].h;
+          if (acc >= target) {
+            split = i + 1;
+            break;
+          }
+        }
+        // não deixa header órfão no fim da 1ª coluna
+        while (split > 1 && blocks[split - 1].keepWithNext) {
+          split--;
+        }
       }
       colBlocks[0].addAll(blocks.take(split));
       colBlocks[1].addAll(blocks.skip(split));
