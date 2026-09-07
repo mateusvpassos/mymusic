@@ -128,8 +128,98 @@ class ChordEngine {
   static final _inlineChord = RegExp(r'\[[A-G][#b]?[^\]]*\]');
   static final _sectionHead = RegExp(r'^\s*\[([^\]]+)\]\s*(.*)$');
 
+  static final _htmlTag = RegExp(r'<[^>]*>');
+  static final _tagResidue = RegExp(r'^[^<>]*>');
+  static final _ccTrailing = RegExp('^\\s*["\']?>\\s*(\\S.*)\$');
+
+  // Tags viram espaços p/ preservar a coluna do acorde; entidades decodificadas.
+  static String _stripTags(String line) =>
+      line.replaceAllMapped(_htmlTag, (m) => ' ' * m.group(0)!.length)
+          .replaceAll('&nbsp;', ' ')
+          .replaceAll('&amp;', '&')
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>')
+          .replaceAll('&quot;', '"')
+          .replaceAll('&#39;', "'");
+
+  // Rede de segurança: sobrou fragmento de tag antes de um acorde -> vira espaço.
+  static String _stripResidue(String line) {
+    final m = _tagResidue.firstMatch(line);
+    if (m == null) return line;
+    final cand = ' ' * m.group(0)!.length + line.substring(m.end);
+    return _isChordLine(cand) ? cand : line;
+  }
+
+  static bool _isSectionLine(String l) =>
+      l.startsWith('#') || _sectionHead.firstMatch(l) != null;
+
+  /// Conserta o artefato de copiar/colar do Cifra Club: acorde que cairia
+  /// depois do fim da letra vem em linha própria prefixada por `">`, seguido
+  /// de uma repetição do trecho inteiro. Ex.:
+  ///
+  ///     C       G7    C
+  ///     Estaremos aqui reunidos
+  ///     ">C7
+  ///     Estaremos aqui reunidos
+  ///
+  /// vira `C  G7  C  C7` sobre uma única letra.
+  static List<String> _fixCifraClub(List<String> lines) {
+    final out = <String>[];
+    var i = 0;
+    while (i < lines.length) {
+      final m = _ccTrailing.firstMatch(lines[i]);
+      final sym = m?.group(1)?.trimRight();
+      if (sym == null || !_isChordLine(sym)) {
+        out.add(lines[i++]);
+        continue;
+      }
+
+      // letra dona do acorde: última linha de letra antes (pulando
+      // linhas em branco e cabeçalhos de seção que também vêm duplicados)
+      var j = out.length - 1;
+      while (j >= 0 && (out[j].trim().isEmpty || _isSectionLine(out[j]))) {
+        j--;
+      }
+      if (j < 0 || _isChordLine(out[j])) {
+        out.add(lines[i++]);
+        continue;
+      }
+      final lyric = out[j];
+      final block = out.sublist(j + 1); // o que veio depois da letra
+
+      // confere se logo abaixo vem a repetição: letra + mesmo bloco
+      var k = i + 1;
+      var dup = k < lines.length && lines[k] == lyric;
+      if (dup) {
+        k++;
+        for (final b in block) {
+          if (k >= lines.length || lines[k] != b) {
+            dup = false;
+            break;
+          }
+          k++;
+        }
+      }
+      if (!dup) {
+        out.add(lines[i++]);
+        continue;
+      }
+
+      // anexa o acorde no fim da linha de acordes da letra
+      final col = lyric.length + 1;
+      if (j > 0 && _isChordLine(out[j - 1])) {
+        out[j - 1] = out[j - 1].padRight(col) + sym;
+      } else {
+        out.insert(j, ''.padRight(col) + sym);
+      }
+      i = k; // descarta a duplicata
+    }
+    return out;
+  }
+
   static List<Section> importText(String text) {
-    final raw = text.replaceAll('\r', '').split('\n');
+    final clean = text.replaceAll('\r', '').split('\n').map(_stripTags).toList();
+    final raw = _fixCifraClub(clean).map(_stripResidue).toList();
     final sections = <Section>[];
     var cur = Section('', []);
     var started = false;
