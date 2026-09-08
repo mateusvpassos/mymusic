@@ -27,8 +27,15 @@ class PdfExport {
   static const _pageW = 595.0, _pageH = 842.0;
   static const _margin = 14.0; // margens enxutas p/ caber mais na folha
   static const _gap = 16.0;
-  static const _charWF = 0.62, _lineHF = 1.45;
+  // Métricas reais da JetBrains Mono (ver test/font_metrics_test.dart):
+  // avanço 0.60em, extensão vertical dos glifos 1.153em. Cada linha é
+  // desenhada com altura fixa `_lineHF`, então a conta de encaixe é exata.
+  static const _charWF = 0.60, _lineHF = 1.25;
   static const _base = 10.5, _minFont = 5.5;
+  // cabeçalho da música: altura imposta, p/ o espaço restante ser exato
+  static const _titleH = 40.0;
+  // folga contra arredondamento — a Column do pacote descarta tudo se estourar
+  static const _safety = 0.98;
 
   static String _chordLine(SongLine l) {
     final sorted = [...l.chords]..sort((a, b) => a.idx.compareTo(b.idx));
@@ -131,7 +138,8 @@ class PdfExport {
       usableH / (tallest * _lineHF),
     ].reduce(min);
 
-    if (f2 > f1) {
+    // 1 coluna é o padrão: só divide se render uma fonte claramente maior
+    if (f2 > f1 * 1.05) {
       return _Fit(2, max(f2, _minFont), parts[0], parts[1], f2 < _minFont);
     }
     return _Fit(1, max(f1, _minFont), rows, const [], f1 < _minFont);
@@ -200,6 +208,21 @@ class PdfExport {
   @visibleForTesting
   static List<List<_Row>> debugSplit(Song song) => _split(_blocks(song));
 
+  /// [colunas, fonte, fração da altura útil ocupada] — usado nos testes.
+  @visibleForTesting
+  static List<double> debugFit(Song song) {
+    final usableW = _pageW - 2 * _margin;
+    final usableH = (_pageH - 2 * _margin - _titleH) * _safety;
+    final f = _fit(song, usableW, usableH);
+    final tallest =
+        f.cols == 1 ? _units(f.left) : max(_units(f.left), _units(f.right));
+    return [
+      f.cols.toDouble(),
+      f.font,
+      tallest * f.font * _lineHF / usableH,
+    ];
+  }
+
   // ---- interno ----
 
   static Future<_Fonts> _fonts() async => _Fonts(
@@ -209,9 +232,8 @@ class PdfExport {
 
   static void _addSongPages(pw.Document doc, Song song, _Fonts f,
       PdfColor chordColor, {required String headerText}) {
-    const titleH = 40.0;
     final usableW = _pageW - 2 * _margin;
-    final usableH = _pageH - 2 * _margin - titleH;
+    final usableH = (_pageH - 2 * _margin - _titleH) * _safety;
     final fit = _fit(song, usableW, usableH);
     final colW = (usableW - _gap) / 2;
 
@@ -227,34 +249,47 @@ class PdfExport {
       }
     }
 
-    // linha em branco precisa de altura explícita — pw.Text('') mede zero
-    pw.Widget rowWidget(_Row r) => r.kind == 3
-        ? pw.SizedBox(height: fit.font * r.units * _lineHF)
-        : pw.Text(r.text,
-            style: styleFor(r.kind), maxLines: 1, softWrap: false);
+    // Altura fixa por linha: pw.Text mede pelo bounding box dos glifos, então
+    // linhas sem acento/descendente ficariam mais baixas e o cálculo de
+    // encaixe erraria. (Linha em branco também mede zero sem isto.)
+    pw.Widget rowWidget(_Row r) => pw.SizedBox(
+          height: fit.font * r.units * _lineHF,
+          child: r.kind == 3
+              ? null
+              : pw.Text(r.text,
+                  style: styleFor(r.kind), maxLines: 1, softWrap: false),
+        );
 
     pw.Widget colOf(List<_Row> rs) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: rs.map(rowWidget).toList(),
         );
 
-    pw.Widget header() => pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 4),
+    // altura fixa: pw.Divider e o bbox dos glifos variam, e qualquer estouro
+    // faz a Column da página descartar o corpo inteiro
+    pw.Widget header() => pw.SizedBox(
+          height: _titleH,
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(headerText,
-                  style: pw.TextStyle(font: f.bold, fontSize: 15)),
-              pw.Text(
-                [
-                  if (song.artist.isNotEmpty) song.artist,
-                  'Tom: ${song.key}',
-                  if (song.capo > 0) 'Capo ${song.capo}',
-                ].join('   •   '),
-                style: pw.TextStyle(
-                    font: f.reg, fontSize: 9, color: PdfColors.grey700),
+              pw.SizedBox(
+                height: 19,
+                child: pw.Text(headerText,
+                    style: pw.TextStyle(font: f.bold, fontSize: 15)),
               ),
-              pw.Divider(),
+              pw.SizedBox(
+                height: 12,
+                child: pw.Text(
+                  [
+                    if (song.artist.isNotEmpty) song.artist,
+                    'Tom: ${song.key}',
+                    if (song.capo > 0) 'Capo ${song.capo}',
+                  ].join('   •   '),
+                  style: pw.TextStyle(
+                      font: f.reg, fontSize: 9, color: PdfColors.grey700),
+                ),
+              ),
+              pw.Container(height: 0.8, color: PdfColors.grey500),
             ],
           ),
         );

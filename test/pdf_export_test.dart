@@ -101,4 +101,30 @@ void main() {
     // primeira linha da 2ª coluna deve ser separador ou cabeçalho de seção
     expect(parts[1].first.kind, anyOf(0, 3));
   });
+
+  test('música curta fica em 1 coluna', () {
+    final fit = PdfExport.debugFit(
+        _song('x', '#Intro\nC G\n\n#Refrão\n C   G\nSó um trecho curto'));
+    expect(fit[0], 1);
+    expect(fit[1], 10.5, reason: 'sem encolher a fonte');
+  });
+
+  test('música média (5 seções) ainda cabe em 1 coluna', () {
+    final fit = PdfExport.debugFit(_song('x', _cifra));
+    expect(fit[0], 1, reason: '2 colunas só quando 1 não dá conta');
+    expect(fit[1], 10.5);
+    expect(fit[2], lessThan(1.0), reason: 'tem que caber na página');
+  });
+
+  test('música longa passa a usar 2 colunas', () {
+    final longa = StringBuffer();
+    for (var i = 0; i < 4; i++) {
+      longa.writeln(_cifra);
+    }
+    final fit = PdfExport.debugFit(_song('x', longa.toString()));
+    expect(fit[0], 2);
+    // se o corpo estourar a área útil, a Column do pacote pdf descarta TUDO
+    // e a página sai só com o cabeçalho — nunca deixar chegar a 100%
+    expect(fit[2], lessThanOrEqualTo(1.0));
+  });
 }
