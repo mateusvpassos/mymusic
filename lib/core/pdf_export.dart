@@ -64,21 +64,39 @@ class PdfExport {
     return n.contains('refr') || n.contains('chorus') || n.contains('coro');
   }
 
-  /// Uma lista de linhas por seção — o corte de coluna só acontece entre elas.
+  /// Grupos que não podem ser partidos entre colunas.
+  ///
+  /// Quebra em cabeçalho de seção **e em linha em branco**: música sem seção
+  /// nomeada costuma marcar os blocos pulando linha, e cortar ali no meio
+  /// separa estrofe do próprio refrão.
   static List<List<_Row>> _blocks(Song song) {
     final out = <List<_Row>>[];
+    var b = <_Row>[];
+
+    // só vira bloco se tiver conteúdo de verdade; separador sozinho é
+    // descartado p/ não gerar bloco vazio nem espaço duplicado
+    void fecha() {
+      if (b.any((r) => r.kind != 3)) out.add(b);
+      b = <_Row>[];
+    }
+
     for (var s = 0; s < song.sections.length; s++) {
       final sec = song.sections[s];
       final refrao = _isRefrao(sec.name);
-      final b = <_Row>[];
-      if (s > 0) b.add(_Row('', 3));
+      fecha();
+      if (out.isNotEmpty) b.add(_Row('', 3));
       if (sec.name.isNotEmpty) b.add(_Row(sec.name.toUpperCase(), 0));
       for (final l in sec.lines) {
+        if (l.chords.isEmpty && l.lyric.trim().isEmpty) {
+          fecha();
+          b.add(_Row('', 3));
+          continue;
+        }
         if (l.chords.isNotEmpty) b.add(_Row(_chordLine(l), 1));
         b.add(_Row(l.lyric.isEmpty ? ' ' : l.lyric, 2, refrao: refrao));
       }
-      out.add(b);
     }
+    fecha();
     return out;
   }
 
@@ -158,35 +176,34 @@ class PdfExport {
       if (blocks.length < 2) _split(blocks),
     ];
 
-    var f2 = 0.0, desnivel = double.infinity;
-    List<_Row> bl = const [], br = const [];
-    var lenL = 0, lenR = 0;
+    final cands = <_Cand>[];
     for (final c in cortes) {
       if (c[0].isEmpty || c[1].isEmpty) continue;
       final ll = _maxLen(c[0]), lr = _maxLen(c[1]);
       final uL = _units(c[0]), uR = _units(c[1]);
-      final f = fontFor(ll, lr, max(uL, uR));
-      final d = (uL - uR).abs();
-      // maior fonte manda; entre cortes de fonte equivalente (2%), fica com
-      // o mais equilibrado p/ não deixar uma coluna curta e outra cheia
-      if (f > f2 * 1.02 || (f > f2 * 0.98 && d < desnivel)) {
-        if (f > f2) f2 = f;
-        desnivel = d;
-        bl = c[0];
-        br = c[1];
-        lenL = ll;
-        lenR = lr;
-      }
-    }
-    // a fonte tem que valer p/ o corte realmente escolhido
-    if (bl.isNotEmpty && br.isNotEmpty) {
-      f2 = fontFor(lenL, lenR, max(_units(bl), _units(br)));
+      cands.add(_Cand(c[0], c[1], ll, lr, uL, uR, fontFor(ll, lr, max(uL, uR))));
     }
 
-    // fica em 1 coluna a menos que dividir renda uma fonte visivelmente maior
-    if (f2 >= _minFont && f2 > f1 * 1.1) {
-      return _Fit(2, f2, bl, br, lenL * _charWF * f2 + 4,
-          lenR * _charWF * f2 + 4, false);
+    if (cands.isNotEmpty) {
+      final melhor = cands.map((c) => c.f).reduce(max);
+      // A coluna 1 é lida primeiro, então ela não pode ser a mais curta —
+      // coluna 1 pela metade com a 2 cheia fica esquisito. Vale pagar um
+      // pouco de fonte por isso, mas não muito.
+      var pool =
+          cands.where((c) => c.uL >= c.uR && c.f >= melhor * 0.85).toList();
+      if (pool.isEmpty) pool = cands;
+
+      // entre os de fonte equivalente, o mais equilibrado
+      final topo = pool.map((c) => c.f).reduce(max);
+      final esc = (pool.where((c) => c.f > topo * 0.98).toList()
+            ..sort((a, b) =>
+                (a.uL - a.uR).abs().compareTo((b.uL - b.uR).abs())))
+          .first;
+
+      if (esc.f >= _minFont && esc.f > f1 * 1.02) {
+        return _Fit(2, esc.f, esc.l, esc.r, esc.lenL * _charWF * esc.f + 4,
+            esc.lenR * _charWF * esc.f + 4, false);
+      }
     }
     if (f1 >= _minFont) {
       return _Fit(1, f1, rows, const [], usableW, 0, false);
@@ -258,6 +275,17 @@ class PdfExport {
 
   @visibleForTesting
   static List<List<_Row>> debugSplit(Song song) => _split(_blocks(song));
+
+  @visibleForTesting
+  static List<List<_Row>> debugBlocks(Song song) => _blocks(song);
+
+  /// As duas colunas como o layout realmente as montou.
+  @visibleForTesting
+  static List<List<_Row>> debugColumns(Song song) {
+    final f = _fit(song, _pageW - 2 * _margin,
+        (_pageH - 2 * _margin - _titleH) * _safety);
+    return [f.left, f.right];
+  }
 
   @visibleForTesting
   static const debugBase = _base;
@@ -388,4 +416,12 @@ class PdfExport {
 class _Fonts {
   final pw.Font reg, bold;
   _Fonts(this.reg, this.bold);
+}
+
+/// Um corte possível em 2 colunas, com o que ele custa em tamanho de fonte.
+class _Cand {
+  final List<_Row> l, r;
+  final int lenL, lenR;
+  final double uL, uR, f;
+  _Cand(this.l, this.r, this.lenL, this.lenR, this.uL, this.uR, this.f);
 }
