@@ -28,19 +28,25 @@ class _Fit {
 class PdfExport {
   // geometria A4 / tipografia
   static const _pageW = 595.0, _pageH = 842.0;
-  static const _margin = 14.0; // margens enxutas p/ caber mais na folha
-  static const _gap = 16.0;
+  static const _margin = 12.0; // margens enxutas p/ caber mais na folha
+  static const _gap = 12.0;
   // Métricas reais da JetBrains Mono (ver test/font_metrics_test.dart):
   // avanço 0.60em, extensão vertical dos glifos 1.153em. Cada linha é
   // desenhada com altura fixa `_lineHF`, então a conta de encaixe é exata.
-  static const _charWF = 0.60, _lineHF = 1.25;
+  //
+  // `_track` aperta as letras 4%: como vale p/ todo caractere (espaço
+  // inclusive), o alinhamento acorde/sílaba não muda, e o texto ficando mais
+  // estreito sobra largura p/ a fonte crescer — que é o que limita cifra de
+  // linha longa em 2 colunas.
+  static const _track = -0.04;
+  static const _charWF = 0.60 + _track, _lineHF = 1.20;
   // _base: tamanho alvo. _comfort: enquanto 1 coluna render pelo menos isto,
   // não divide — 2 colunas é p/ música grande, não p/ ganhar meio ponto de
   // fonte deixando meia folha vazia. _minFont: abaixo disto desiste de
   // espremer e deixa fluir p/ outra página.
   static const _base = 13.0, _comfort = 9.5, _minFont = 7.5;
   // cabeçalho da música: altura imposta, p/ o espaço restante ser exato
-  static const _titleH = 40.0;
+  static const _titleH = 34.0;
   // folga contra arredondamento — a Column do pacote descarta tudo se estourar
   static const _safety = 0.98;
 
@@ -156,7 +162,7 @@ class PdfExport {
     // com 2 colunas reserva o vão + os 4pt de respiro de cada coluna
     double fontFor(int lenL, int lenR, double tallest) => [
           _base,
-          (usableW - (lenR > 0 ? _gap + 8 : 0)) / ((lenL + lenR) * _charWF),
+          (usableW - (lenR > 0 ? _gap + 4 : 0)) / ((lenL + lenR) * _charWF),
           usableH / (tallest * _lineHF),
         ].reduce(min);
 
@@ -294,7 +300,7 @@ class PdfExport {
     final rows = blocks.expand((b) => b).toList();
     double fontFor(int lenL, int lenR, double tallest) => [
           _base,
-          (usableW - (lenR > 0 ? _gap + 8 : 0)) / ((lenL + lenR) * _charWF),
+          (usableW - (lenR > 0 ? _gap + 4 : 0)) / ((lenL + lenR) * _charWF),
           usableH / (tallest * _lineHF),
         ].reduce(min);
     final out = <String>[
@@ -352,18 +358,29 @@ class PdfExport {
     final usableH = (_pageH - 2 * _margin - _titleH) * _safety;
     final fit = _fit(song, usableW, usableH);
 
+    // letterSpacing é em pontos: proporcional ao corpo p/ o aperto ser igual
+    // em qualquer tamanho, e igual em acorde e letra p/ não desalinhar
     pw.TextStyle styleFor(_Row r) {
       switch (r.kind) {
         case 0:
           return pw.TextStyle(
-              font: f.bold, fontSize: fit.font * 0.85, color: chordColor);
+              font: f.bold,
+              fontSize: fit.font * 0.85,
+              letterSpacing: fit.font * 0.85 * _track,
+              color: chordColor);
         case 1:
-          return pw.TextStyle(font: f.bold, fontSize: fit.font, color: chordColor);
+          return pw.TextStyle(
+              font: f.bold,
+              fontSize: fit.font,
+              letterSpacing: fit.font * _track,
+              color: chordColor);
         default:
           // letra do refrão em negrito (mesma largura de caractere, não
           // desalinha os acordes)
           return pw.TextStyle(
-              font: r.refrao ? f.bold : f.reg, fontSize: fit.font);
+              font: r.refrao ? f.bold : f.reg,
+              fontSize: fit.font,
+              letterSpacing: fit.font * _track);
       }
     }
 
@@ -391,12 +408,12 @@ class PdfExport {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.SizedBox(
-                height: 19,
+                height: 17,
                 child: pw.Text(headerText,
-                    style: pw.TextStyle(font: f.bold, fontSize: 15)),
+                    style: pw.TextStyle(font: f.bold, fontSize: 14)),
               ),
               pw.SizedBox(
-                height: 12,
+                height: 11,
                 child: pw.Text(
                   [
                     if (song.artist.isNotEmpty) song.artist,

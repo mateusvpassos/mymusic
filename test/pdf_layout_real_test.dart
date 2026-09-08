@@ -223,7 +223,15 @@ void main() {
       // mas o texto ocuparia só ~275pt dos 567 de largura: metade da folha
       // vazia à direita. Dividir usa a página inteira.
       expect(fit[0], 2);
-      expect(fit[1], greaterThan(9.0));
+      expect(fit[1], greaterThan(10.5), reason: 'já saiu em 9.57 e em 9.73');
+    });
+
+    test('está no teto do que cabe numa página A4', () {
+      // Com linhas de ~47 caracteres, duas colunas precisam de 94 caracteres
+      // atravessando a folha — é isso que trava a fonte, não a altura. Nenhum
+      // corte muda essa conta, então metade da altura sobra mesmo.
+      final fit = PdfExport.debugFit(song);
+      expect(fit[2], lessThan(0.7), reason: 'sobra altura: quem limita é a largura');
     });
 
     test('divide 3 seções de cada lado', () {
