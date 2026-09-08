@@ -214,18 +214,24 @@ void main() {
     });
   });
 
-  test('Teu Óleo Santo: fonte limitada pela largura, não pela altura', () {
+  group('Teu Óleo Santo (linhas longas)', () {
     final song = _song('Teu Óleo Santo', _oleo);
-    final fit = PdfExport.debugFit(song);
-    // ignore: avoid_print
-    print('óleo -> col=${fit[0]} fonte=${fit[1].toStringAsFixed(2)} '
-        'ocup=${fit[2].toStringAsFixed(2)}');
-    expect(fit[0], 2);
-    expect(fit[1], greaterThan(9.57), reason: 'saía em 9.57');
-    // A folha sobra embaixo porque o que trava é a largura das linhas
-    // (~46 caracteres em cada coluna), não a altura. Se a ocupação passar
-    // a bater no teto, revisar — aí passou a ser a altura que limita.
-    expect(fit[2], lessThan(1.0));
+
+    test('usa 2 colunas mesmo sem ganhar fonte', () {
+      final fit = PdfExport.debugFit(song);
+      // Em 1 coluna a fonte seria praticamente a mesma (9.76 contra 9.73),
+      // mas o texto ocuparia só ~275pt dos 567 de largura: metade da folha
+      // vazia à direita. Dividir usa a página inteira.
+      expect(fit[0], 2);
+      expect(fit[1], greaterThan(9.0));
+    });
+
+    test('divide 3 seções de cada lado', () {
+      final cols = PdfExport.debugColumns(song);
+      int secoes(List rows) => rows.where((r) => r.kind == 0).length;
+      expect(secoes(cols[0]), 3);
+      expect(secoes(cols[1]), 3);
+    });
   });
 
   test('gera o PDF dos dois p/ inspeção', () async {

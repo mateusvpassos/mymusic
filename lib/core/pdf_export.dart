@@ -186,21 +186,27 @@ class PdfExport {
 
     if (cands.isNotEmpty) {
       final melhor = cands.map((c) => c.f).reduce(max);
-      // A coluna 1 é lida primeiro, então ela não pode ser a mais curta —
-      // coluna 1 pela metade com a 2 cheia fica esquisito. Vale pagar um
-      // pouco de fonte por isso, mas não muito.
-      var pool =
-          cands.where((c) => c.uL >= c.uR && c.f >= melhor * 0.85).toList();
+      // A coluna 1 é lida primeiro: ela pode empatar com a 2, mas não ficar
+      // bem mais curta. Vale pagar um pouco de fonte por isso, não muito.
+      var pool = cands
+          .where((c) => c.uL >= c.uR * 0.85 && c.f >= melhor * 0.85)
+          .toList();
       if (pool.isEmpty) pool = cands;
 
-      // entre os de fonte equivalente, o mais equilibrado
+      // entre cortes de fonte parecida, o mais equilibrado: 3 seções de cada
+      // lado lê melhor do que 5 e 1, e a diferença de fonte é imperceptível
       final topo = pool.map((c) => c.f).reduce(max);
-      final esc = (pool.where((c) => c.f > topo * 0.98).toList()
+      final esc = (pool.where((c) => c.f >= topo * 0.95).toList()
             ..sort((a, b) =>
                 (a.uL - a.uR).abs().compareTo((b.uL - b.uR).abs())))
           .first;
 
-      if (esc.f >= _minFont && esc.f > f1 * 1.02) {
+      // Uma coluna só que usa pouco mais da metade da largura desperdiça
+      // a folha: nesse caso vale dividir mesmo sem ganhar fonte.
+      final estreita = _maxLen(rows) * _charWF * f1 < usableW * 0.6;
+      final vale = esc.f > f1 * 1.02 || (estreita && esc.f > f1 * 0.95);
+
+      if (esc.f >= _minFont && vale) {
         return _Fit(2, esc.f, esc.l, esc.r, esc.lenL * _charWF * esc.f + 4,
             esc.lenR * _charWF * esc.f + 4, false);
       }
@@ -278,6 +284,33 @@ class PdfExport {
 
   @visibleForTesting
   static List<List<_Row>> debugBlocks(Song song) => _blocks(song);
+
+  /// Tabela dos cortes possíveis — usada p/ afinar a escolha de coluna.
+  @visibleForTesting
+  static List<String> debugCandidates(Song song) {
+    final usableW = _pageW - 2 * _margin;
+    final usableH = (_pageH - 2 * _margin - _titleH) * _safety;
+    final blocks = _blocks(song);
+    final rows = blocks.expand((b) => b).toList();
+    double fontFor(int lenL, int lenR, double tallest) => [
+          _base,
+          (usableW - (lenR > 0 ? _gap + 8 : 0)) / ((lenL + lenR) * _charWF),
+          usableH / (tallest * _lineHF),
+        ].reduce(min);
+    final out = <String>[
+      '1col: len=${_maxLen(rows)} u=${_units(rows).toStringAsFixed(1)} '
+          'f=${fontFor(_maxLen(rows), 0, _units(rows)).toStringAsFixed(2)}'
+    ];
+    for (var i = 1; i < blocks.length; i++) {
+      final l = blocks.take(i).expand((b) => b).toList();
+      final r = blocks.skip(i).expand((b) => b).toList();
+      final ll = _maxLen(l), lr = _maxLen(r);
+      final uL = _units(l), uR = _units(r);
+      out.add('corte $i: lenL=$ll lenR=$lr uL=${uL.toStringAsFixed(1)} '
+          'uR=${uR.toStringAsFixed(1)} f=${fontFor(ll, lr, max(uL, uR)).toStringAsFixed(2)}');
+    }
+    return out;
+  }
 
   /// As duas colunas como o layout realmente as montou.
   @visibleForTesting
