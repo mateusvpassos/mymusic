@@ -9,7 +9,8 @@ import '../models/song.dart';
 class _Row {
   final String text;
   final int kind; // 0 header, 1 chord, 2 lyric, 3 blank
-  _Row(this.text, this.kind);
+  final bool refrao; // letra do refrão sai em negrito
+  _Row(this.text, this.kind, {this.refrao = false});
   double get units => kind == 0 ? 1.7 : (kind == 3 ? 0.8 : 1.0);
 }
 
@@ -18,8 +19,10 @@ class _Fit {
   final int cols;
   final double font;
   final List<_Row> left, right;
-  final bool overflow; // não coube nem na fonte mínima -> deixa fluir p/ +1 página
-  _Fit(this.cols, this.font, this.left, this.right, this.overflow);
+  final double leftW, rightW; // cada coluna com a largura do próprio conteúdo
+  final bool overflow; // não coube nem espremido -> deixa fluir p/ +1 página
+  _Fit(this.cols, this.font, this.left, this.right, this.leftW, this.rightW,
+      this.overflow);
 }
 
 class PdfExport {
@@ -56,17 +59,23 @@ class PdfExport {
     return sb.toString();
   }
 
+  static bool _isRefrao(String name) {
+    final n = name.toLowerCase();
+    return n.contains('refr') || n.contains('chorus') || n.contains('coro');
+  }
+
   /// Uma lista de linhas por seção — o corte de coluna só acontece entre elas.
   static List<List<_Row>> _blocks(Song song) {
     final out = <List<_Row>>[];
     for (var s = 0; s < song.sections.length; s++) {
       final sec = song.sections[s];
+      final refrao = _isRefrao(sec.name);
       final b = <_Row>[];
       if (s > 0) b.add(_Row('', 3));
       if (sec.name.isNotEmpty) b.add(_Row(sec.name.toUpperCase(), 0));
       for (final l in sec.lines) {
         if (l.chords.isNotEmpty) b.add(_Row(_chordLine(l), 1));
-        b.add(_Row(l.lyric.isEmpty ? ' ' : l.lyric, 2));
+        b.add(_Row(l.lyric.isEmpty ? ' ' : l.lyric, 2, refrao: refrao));
       }
       out.add(b);
     }
@@ -118,38 +127,73 @@ class PdfExport {
   }
 
   /// Escolhe entre 1 e 2 colunas e a maior fonte que ainda cabe na página.
+  ///
+  /// As colunas não têm largura fixa: cada uma recebe a largura do seu próprio
+  /// conteúdo. Duas colunas estreitas sobram espaço p/ a fonte crescer, o que
+  /// não acontecia dividindo a página ao meio.
   static _Fit _fit(Song song, double usableW, double usableH) {
     final blocks = _blocks(song);
     final rows = blocks.expand((b) => b).toList();
-    final maxLen = _maxLen(rows);
-    final total = _units(rows);
 
-    // 1 coluna
-    final f1 = [
-      _base,
-      usableW / (maxLen * _charWF),
-      usableH / (total * _lineHF),
-    ].reduce(min);
-    // enquanto der p/ ler numa coluna só, fica numa coluna só
-    if (f1 >= _comfort) return _Fit(1, f1, rows, const [], false);
+    // com 2 colunas reserva o vão + os 4pt de respiro de cada coluna
+    double fontFor(int lenL, int lenR, double tallest) => [
+          _base,
+          (usableW - (lenR > 0 ? _gap + 8 : 0)) / ((lenL + lenR) * _charWF),
+          usableH / (tallest * _lineHF),
+        ].reduce(min);
 
-    // 2 colunas
-    final colW = (usableW - _gap) / 2;
-    final parts = _split(blocks);
-    final tallest = max(_units(parts[0]), _units(parts[1]));
-    final f2 = [
-      _base,
-      colW / (maxLen * _charWF),
-      usableH / (tallest * _lineHF),
-    ].reduce(min);
-
-    if (f2 >= _minFont && f2 > f1) {
-      return _Fit(2, f2, parts[0], parts[1], false);
+    final f1 = fontFor(_maxLen(rows), 0, _units(rows));
+    if (f1 >= _base) {
+      return _Fit(1, f1, rows, const [], usableW, 0, false);
     }
-    if (f1 >= _minFont) return _Fit(1, f1, rows, const [], false);
+
+    // candidatos a corte: cada fronteira de seção + o corte por linha
+    // (que cobre a música de seção única gigante)
+    final cortes = <List<List<_Row>>>[
+      for (var i = 1; i < blocks.length; i++)
+        [
+          blocks.take(i).expand((b) => b).toList(),
+          blocks.skip(i).expand((b) => b).toList(),
+        ],
+      if (blocks.length < 2) _split(blocks),
+    ];
+
+    var f2 = 0.0, desnivel = double.infinity;
+    List<_Row> bl = const [], br = const [];
+    var lenL = 0, lenR = 0;
+    for (final c in cortes) {
+      if (c[0].isEmpty || c[1].isEmpty) continue;
+      final ll = _maxLen(c[0]), lr = _maxLen(c[1]);
+      final uL = _units(c[0]), uR = _units(c[1]);
+      final f = fontFor(ll, lr, max(uL, uR));
+      final d = (uL - uR).abs();
+      // maior fonte manda; entre cortes de fonte equivalente (2%), fica com
+      // o mais equilibrado p/ não deixar uma coluna curta e outra cheia
+      if (f > f2 * 1.02 || (f > f2 * 0.98 && d < desnivel)) {
+        if (f > f2) f2 = f;
+        desnivel = d;
+        bl = c[0];
+        br = c[1];
+        lenL = ll;
+        lenR = lr;
+      }
+    }
+    // a fonte tem que valer p/ o corte realmente escolhido
+    if (bl.isNotEmpty && br.isNotEmpty) {
+      f2 = fontFor(lenL, lenR, max(_units(bl), _units(br)));
+    }
+
+    // fica em 1 coluna a menos que dividir renda uma fonte visivelmente maior
+    if (f2 >= _minFont && f2 > f1 * 1.1) {
+      return _Fit(2, f2, bl, br, lenL * _charWF * f2 + 4,
+          lenR * _charWF * f2 + 4, false);
+    }
+    if (f1 >= _minFont) {
+      return _Fit(1, f1, rows, const [], usableW, 0, false);
+    }
 
     // não cabe numa página nem espremido: melhor ler em duas páginas
-    return _Fit(1, _comfort, rows, const [], true);
+    return _Fit(1, _comfort, rows, const [], usableW, 0, true);
   }
 
   static Future<void> printOrShare(Song song,
@@ -246,17 +290,19 @@ class PdfExport {
     final usableW = _pageW - 2 * _margin;
     final usableH = (_pageH - 2 * _margin - _titleH) * _safety;
     final fit = _fit(song, usableW, usableH);
-    final colW = (usableW - _gap) / 2;
 
-    pw.TextStyle styleFor(int kind) {
-      switch (kind) {
+    pw.TextStyle styleFor(_Row r) {
+      switch (r.kind) {
         case 0:
           return pw.TextStyle(
               font: f.bold, fontSize: fit.font * 0.85, color: chordColor);
         case 1:
           return pw.TextStyle(font: f.bold, fontSize: fit.font, color: chordColor);
         default:
-          return pw.TextStyle(font: f.reg, fontSize: fit.font);
+          // letra do refrão em negrito (mesma largura de caractere, não
+          // desalinha os acordes)
+          return pw.TextStyle(
+              font: r.refrao ? f.bold : f.reg, fontSize: fit.font);
       }
     }
 
@@ -268,7 +314,7 @@ class PdfExport {
           child: r.kind == 3
               ? null
               : pw.Text(r.text,
-                  style: styleFor(r.kind), maxLines: 1, softWrap: false),
+                  style: styleFor(r), maxLines: 1, softWrap: false),
         );
 
     pw.Widget colOf(List<_Row> rs) => pw.Column(
@@ -321,9 +367,10 @@ class PdfExport {
         : pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.SizedBox(width: colW, child: colOf(fit.left)),
-              pw.SizedBox(width: _gap),
-              pw.SizedBox(width: colW, child: colOf(fit.right)),
+              pw.SizedBox(width: fit.leftW, child: colOf(fit.left)),
+              pw.SizedBox(
+                  width: max(_gap, usableW - fit.leftW - fit.rightW)),
+              pw.SizedBox(width: fit.rightW, child: colOf(fit.right)),
             ],
           );
 

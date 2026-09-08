@@ -8,6 +8,19 @@ import 'package:pdf/src/pdf/font/ttf_parser.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('negrito tem a mesma largura da regular', () async {
+    double widthOf(TtfParser p) {
+      final gi = p.charToGlyphIndexMap['M'.codeUnitAt(0)]!;
+      return p.glyphInfoMap[gi]!.advanceWidth;
+    }
+
+    final reg = TtfParser(await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
+    final bold = TtfParser(await rootBundle.load('assets/fonts/JetBrainsMono-Bold.ttf'));
+    // o refrão sai em negrito e os acordes também — se a largura diferisse,
+    // o acorde não ficaria mais em cima da sílaba certa
+    expect(widthOf(bold), closeTo(widthOf(reg), 0.001));
+  });
+
   test('métricas da JetBrains Mono', () async {
     final p = TtfParser(await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
 
