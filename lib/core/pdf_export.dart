@@ -31,7 +31,11 @@ class PdfExport {
   // avanço 0.60em, extensão vertical dos glifos 1.153em. Cada linha é
   // desenhada com altura fixa `_lineHF`, então a conta de encaixe é exata.
   static const _charWF = 0.60, _lineHF = 1.25;
-  static const _base = 10.5, _minFont = 5.5;
+  // _base: tamanho alvo. _comfort: enquanto 1 coluna render pelo menos isto,
+  // não divide — 2 colunas é p/ música grande, não p/ ganhar meio ponto de
+  // fonte deixando meia folha vazia. _minFont: abaixo disto desiste de
+  // espremer e deixa fluir p/ outra página.
+  static const _base = 13.0, _comfort = 9.5, _minFont = 7.5;
   // cabeçalho da música: altura imposta, p/ o espaço restante ser exato
   static const _titleH = 40.0;
   // folga contra arredondamento — a Column do pacote descarta tudo se estourar
@@ -126,7 +130,8 @@ class PdfExport {
       usableW / (maxLen * _charWF),
       usableH / (total * _lineHF),
     ].reduce(min);
-    if (f1 >= _base) return _Fit(1, _base, rows, const [], false);
+    // enquanto der p/ ler numa coluna só, fica numa coluna só
+    if (f1 >= _comfort) return _Fit(1, f1, rows, const [], false);
 
     // 2 colunas
     final colW = (usableW - _gap) / 2;
@@ -138,11 +143,13 @@ class PdfExport {
       usableH / (tallest * _lineHF),
     ].reduce(min);
 
-    // 1 coluna é o padrão: só divide se render uma fonte claramente maior
-    if (f2 > f1 * 1.05) {
-      return _Fit(2, max(f2, _minFont), parts[0], parts[1], f2 < _minFont);
+    if (f2 >= _minFont && f2 > f1) {
+      return _Fit(2, f2, parts[0], parts[1], false);
     }
-    return _Fit(1, max(f1, _minFont), rows, const [], f1 < _minFont);
+    if (f1 >= _minFont) return _Fit(1, f1, rows, const [], false);
+
+    // não cabe numa página nem espremido: melhor ler em duas páginas
+    return _Fit(1, _comfort, rows, const [], true);
   }
 
   static Future<void> printOrShare(Song song,
@@ -208,6 +215,9 @@ class PdfExport {
   @visibleForTesting
   static List<List<_Row>> debugSplit(Song song) => _split(_blocks(song));
 
+  @visibleForTesting
+  static const debugBase = _base;
+
   /// [colunas, fonte, fração da altura útil ocupada] — usado nos testes.
   @visibleForTesting
   static List<double> debugFit(Song song) {
@@ -220,6 +230,7 @@ class PdfExport {
       f.cols.toDouble(),
       f.font,
       tallest * f.font * _lineHF / usableH,
+      f.overflow ? 1 : 0,
     ];
   }
 
