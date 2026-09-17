@@ -95,36 +95,54 @@ void main() {
     expect(await f.length(), greaterThan(500));
   });
 
-  group('música longa (2 colunas)', () {
-    // repete as seções até o layout precisar dividir
+  test('sempre em 1 coluna, sem tabela', () {
+    // no Word o usuário edita o texto; tabela/coluna atrapalha
+    expect(partes['word/document.xml']!, isNot(contains('<w:tbl>')));
+    expect(partes['word/document.xml']!, isNot(contains('<w:cols')));
+  });
+
+  test('keepNext só onde não pode separar', () {
+    final doc = partes['word/document.xml']!;
+    final paras = RegExp(r'<w:p>.*?</w:p>', dotAll: true).allMatches(doc);
+    // se todo parágrafo tivesse keepNext, o Word empurraria a música
+    // inteira p/ a página seguinte em vez de quebrar
+    final comKeep = paras.where((m) => m.group(0)!.contains('keepNext')).length;
+    expect(comKeep, greaterThan(0));
+    expect(comKeep, lessThan(paras.length));
+  });
+
+  group('música longa', () {
     final longa = Song(
       id: 'y',
       title: 'Longa',
       key: 'C',
-      sections: ChordEngine.importText(
-          List.filled(5, _cifra).join('\n').replaceAllMapped(
-              RegExp(r'#(Refrão|Primeira Parte)'),
-              (m) => '#${m[1]} ${DateTime.now().microsecond}')),
+      sections: ChordEngine.importText(List.filled(6, _cifra).join('\n')),
     );
     final b2 = DocxExport.buildDocx(
         DocxExport.songBody(longa, chordColor: Colors.blue));
     final p2 = _unzip(b2);
 
-    test('vira tabela de 2 colunas', () {
-      expect(p2['word/document.xml']!, contains('<w:tbl>'));
-      expect(p2['word/document.xml']!, contains('<w:gridCol'));
+    test('continua em 1 coluna e deixa o Word paginar', () {
+      expect(p2['word/document.xml']!, isNot(contains('<w:tbl>')));
     });
 
-    test('toda célula termina com um parágrafo (exigência do Word)', () {
-      final doc = p2['word/document.xml']!;
-      for (final m in RegExp(r'<w:tc>.*?</w:tc>', dotAll: true).allMatches(doc)) {
-        expect(m.group(0)!, endsWith('</w:p></w:tc>'),
-            reason: 'célula sem parágrafo final faz o Word recusar o arquivo');
-      }
+    test('fonte limitada só pela largura da linha', () {
+      // linhas curtas: não tem por que encolher
+      expect(DocxExport.fontFor(longa), 13.0);
     });
 
-    test('salva o de 2 colunas p/ inspeção', () async {
-      final f = File('build/test-cifra-2col.docx');
+    test('linha muito longa encolhe a fonte p/ não quebrar', () {
+      final larga = Song(
+        id: 'z',
+        title: 'Larga',
+        key: 'C',
+        sections: ChordEngine.importText('#A\n C\n${'palavra ' * 20}'),
+      );
+      expect(DocxExport.fontFor(larga), lessThan(13.0));
+    });
+
+    test('salva o longo p/ inspeção', () async {
+      final f = File('build/test-cifra-longa.docx');
       await f.create(recursive: true);
       await f.writeAsBytes(b2);
       expect(await f.length(), greaterThan(500));

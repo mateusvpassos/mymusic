@@ -7,12 +7,12 @@ import 'package:share_plus/share_plus.dart';
 import '../models/song.dart';
 import 'chart_layout.dart';
 
-/// Exporta a cifra como .docx (Word), com o mesmo encaixe de colunas e
-/// tamanho de fonte do PDF.
+/// Exporta a cifra como .docx (Word), sempre em **uma coluna só**, de cima
+/// para baixo — é mais fácil de editar depois no Word.
 ///
-/// Um .docx é um zip de XMLs. As colunas viram uma tabela de 2 células sem
-/// borda: coluna de verdade (`w:cols`) fluiria sozinha e cortaria os grupos
-/// no meio, que é justamente o que o cálculo de layout evita.
+/// Um .docx é um zip de XMLs. Sem a amarra de caber numa página (o Word
+/// pagina sozinho), o tamanho da fonte é limitado só pela largura da linha
+/// mais longa, até o tamanho alvo.
 class DocxExport {
   // twips = 1/20 pt. O Word mede quase tudo nessa unidade.
   static int _tw(double pt) => (pt * 20).round();
@@ -54,21 +54,28 @@ class DocxExport {
       ..write('<w:spacing w:val="${_tw(size * ChartLayout.track)}"/>')
       ..write('</w:rPr>');
 
-    return '<w:p><w:pPr>$spacing<w:keepNext/></w:pPr>'
+    // acorde não pode ser separado da sua letra, nem o nome da seção da
+    // primeira linha dela; no resto deixa o Word quebrar a página à vontade
+    final keep = (r.kind == 0 || r.kind == 1) ? '<w:keepNext/>' : '';
+    return '<w:p><w:pPr>$spacing$keep</w:pPr>'
         '<w:r>$rPr<w:t xml:space="preserve">${_esc(r.text)}</w:t></w:r></w:p>';
   }
 
   static String _col(List<ChartRow> rs, double font, String chordHex) =>
       rs.map((r) => _p(r, font, chordHex)).join();
 
-  /// Célula sem borda, com largura fixa.
-  static String _cell(String inner, double widthPt) =>
-      '<w:tc><w:tcPr><w:tcW w:w="${_tw(widthPt)}" w:type="dxa"/>'
-      '<w:tcMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>'
-      '</w:tcMar></w:tcPr>$inner</w:tc>';
+  /// Maior fonte em que a linha mais longa ainda cabe na largura da página.
+  ///
+  /// Não olha altura: o documento corre em uma coluna e o Word quebra a
+  /// página sozinho quando precisa.
+  static double fontFor(Song song) {
+    final len = ChartLayout.maxLen(ChartLayout.rows(song));
+    final porLargura = ChartLayout.usableW / (len * ChartLayout.charWF);
+    return porLargura < ChartLayout.base ? porLargura : ChartLayout.base;
+  }
 
   static String _songBody(Song song, String headerText, String chordHex) {
-    final fit = ChartLayout.fit(song, ChartLayout.usableW, ChartLayout.usableH);
+    final font = fontFor(song);
     final sb = StringBuffer();
 
     // cabeçalho
@@ -88,27 +95,7 @@ class DocxExport {
         '<w:sz w:val="18"/><w:color w:val="666666"/></w:rPr>'
         '<w:t xml:space="preserve">${_esc(sub)}</w:t></w:r></w:p>');
 
-    if (fit.cols == 1) {
-      sb.write(_col(fit.left, fit.font, chordHex));
-    } else {
-      final vao = ChartLayout.usableW - fit.leftW - fit.rightW;
-      sb.write('<w:tbl><w:tblPr>'
-          '<w:tblW w:w="${_tw(ChartLayout.usableW)}" w:type="dxa"/>'
-          '<w:tblBorders>'
-          '<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/>'
-          '<w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/>'
-          '</w:tblBorders>'
-          '<w:tblLayout w:type="fixed"/></w:tblPr>'
-          '<w:tblGrid>'
-          '<w:gridCol w:w="${_tw(fit.leftW)}"/>'
-          '<w:gridCol w:w="${_tw(vao)}"/>'
-          '<w:gridCol w:w="${_tw(fit.rightW)}"/>'
-          '</w:tblGrid><w:tr>');
-      sb.write(_cell(_col(fit.left, fit.font, chordHex), fit.leftW));
-      sb.write(_cell('<w:p></w:p>', vao));
-      sb.write(_cell(_col(fit.right, fit.font, chordHex), fit.rightW));
-      sb.write('</w:tr></w:tbl>');
-    }
+    sb.write(_col(ChartLayout.rows(song), font, chordHex));
     return sb.toString();
   }
 
