@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/chord_engine.dart';
 import '../core/chord_shapes.dart';
+import '../core/docx_export.dart';
 import '../core/image_export.dart';
 import '../core/pdf_export.dart';
 import '../core/pedal.dart';
@@ -333,9 +334,16 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                       if (v == 'img') {
                         ImageExport.shareImage(shown, chordColor: strong, namePrefix: prefix);
                       }
+                      if (v == 'docx') {
+                        DocxExport.shareSong(shown,
+                            chordColor: strong, namePrefix: prefix);
+                      }
+                      st.logEvent('exportou', 'musica', base.title,
+                          details: ['Formato: ${v.toUpperCase()}']);
                     },
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'pdf', child: Text('PDF / Imprimir')),
+                      PopupMenuItem(value: 'docx', child: Text('Word (.docx)')),
                       PopupMenuItem(value: 'img', child: Text('Imagem (PNG)')),
                     ],
                   ),

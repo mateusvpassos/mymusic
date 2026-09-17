@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/chord_engine.dart';
+import '../models/audit.dart';
 import '../models/song.dart';
 
 /// Estado global + persistência JSON em arquivo único no diretório do app.
@@ -11,6 +12,14 @@ class AppState extends ChangeNotifier {
   final List<Song> songs = [];
   final List<Setlist> setlists = [];
   AppSettings settings = AppSettings();
+
+  /// Histórico do que mudou, mais recente primeiro.
+  final List<AuditEvent> audit = [];
+  static const _auditMax = 400;
+
+  // retratos da última gravação, p/ saber o que mudou de fato
+  final Map<String, SongSnap> _songSnaps = {};
+  final Map<String, SetlistSnap> _setSnaps = {};
 
   File? _file;
   Timer? _debounce;
@@ -36,8 +45,13 @@ class AppState extends ChangeNotifier {
         if (j['settings'] != null) {
           settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
         }
+        audit
+          ..clear()
+          ..addAll((j['audit'] as List? ?? [])
+              .map((e) => AuditEvent.fromJson(e as Map<String, dynamic>)));
       } catch (_) {/* arquivo corrompido: começa vazio */}
     }
+    _resnap();
     loaded = true;
     notifyListeners();
   }
@@ -46,7 +60,74 @@ class AppState extends ChangeNotifier {
         'songs': songs.map((s) => s.toJson()).toList(),
         'setlists': setlists.map((s) => s.toJson()).toList(),
         'settings': settings.toJson(),
+        'audit': audit.map((e) => e.toJson()).toList(),
       };
+
+  // ---- auditoria ----
+
+  void _log(String action, String entity, String title,
+      {String id = '', List<String> details = const []}) {
+    audit.insert(
+      0,
+      AuditEvent(
+        at: DateTime.now(),
+        action: action,
+        entity: entity,
+        entityId: id,
+        title: title,
+        details: details,
+      ),
+    );
+    if (audit.length > _auditMax) audit.removeRange(_auditMax, audit.length);
+  }
+
+  void clearAudit() {
+    audit.clear();
+    touch();
+  }
+
+  static SongSnap _snapOf(Song s) {
+    var lines = 0, h = 17;
+    for (final sec in s.sections) {
+      h = 0x1fffffff & (h * 31 + sec.name.hashCode);
+      for (final l in sec.lines) {
+        lines++;
+        h = 0x1fffffff & (h * 31 + l.lyric.hashCode);
+        for (final c in l.chords) {
+          h = 0x1fffffff & (h * 31 + c.sym.hashCode * 31 + c.idx);
+        }
+      }
+    }
+    return SongSnap(
+      title: s.title,
+      artist: s.artist,
+      key: s.key,
+      notes: s.notes,
+      capo: s.capo,
+      bpm: s.bpm,
+      tags: (List.of(s.tags)..sort()).join(', '),
+      lines: lines,
+      contentHash: h,
+    );
+  }
+
+  static SetlistSnap _snapOfSet(Setlist sl) => SetlistSnap(
+        name: sl.name,
+        songIds: List.of(sl.songIds),
+        transpose: Map.of(sl.transpose),
+        date: sl.date == null ? '' : sl.date!.toIso8601String().substring(0, 10),
+      );
+
+  void _resnap() {
+    _songSnaps
+      ..clear()
+      ..addEntries(songs.map((s) => MapEntry(s.id, _snapOf(s))));
+    _setSnaps
+      ..clear()
+      ..addEntries(setlists.map((s) => MapEntry(s.id, _snapOfSet(s))));
+  }
+
+  String _titleOf(String id) => songById(id)?.title ?? '(removida)';
 
   void _scheduleSave() {
     _debounce?.cancel();
@@ -75,19 +156,35 @@ class AppState extends ChangeNotifier {
   void upsertSong(Song s) {
     s.updatedAt = DateTime.now();
     final i = songs.indexWhere((x) => x.id == s.id);
+    final antes = _songSnaps[s.id];
+    final agora = _snapOf(s);
     if (i >= 0) {
       songs[i] = s;
+      final d = antes?.diff(agora) ?? const <String>[];
+      // sem diferença nenhuma é só um salvar repetido: não vira evento
+      if (d.isNotEmpty) {
+        _log('editou', 'musica', s.title, id: s.id, details: d);
+      }
     } else {
       songs.insert(0, s);
+      _log('criou', 'musica', s.title, id: s.id);
     }
+    _songSnaps[s.id] = agora;
     touch();
   }
 
   void deleteSong(String id) {
-    songs.removeWhere((s) => s.id == id);
+    final s = songById(id);
+    final usada = setlists.where((sl) => sl.songIds.contains(id)).toList();
+    songs.removeWhere((x) => x.id == id);
     for (final sl in setlists) {
-      sl.songIds.remove(id);
+      if (sl.songIds.remove(id)) _setSnaps[sl.id] = _snapOfSet(sl);
     }
+    _songSnaps.remove(id);
+    _log('excluiu', 'musica', s?.title ?? id, id: id, details: [
+      if (usada.isNotEmpty)
+        'Saiu de ${usada.length} repertório(s): ${usada.map((x) => x.name).join(', ')}',
+    ]);
     touch();
   }
 
@@ -97,6 +194,8 @@ class AppState extends ChangeNotifier {
     c.title = '${s.title} (cópia)';
     c.updatedAt = DateTime.now();
     songs.insert(0, c);
+    _songSnaps[c.id] = _snapOf(c);
+    _log('duplicou', 'musica', c.title, id: c.id, details: ['Cópia de "${s.title}"']);
     touch();
     return c;
   }
@@ -104,11 +203,19 @@ class AppState extends ChangeNotifier {
   void upsertSetlist(Setlist sl) {
     sl.updatedAt = DateTime.now();
     final i = setlists.indexWhere((x) => x.id == sl.id);
+    final antes = _setSnaps[sl.id];
+    final agora = _snapOfSet(sl);
     if (i >= 0) {
       setlists[i] = sl;
+      final d = antes?.diff(agora, _titleOf) ?? const <String>[];
+      if (d.isNotEmpty) {
+        _log('editou', 'repertorio', sl.name, id: sl.id, details: d);
+      }
     } else {
       setlists.insert(0, sl);
+      _log('criou', 'repertorio', sl.name, id: sl.id);
     }
+    _setSnaps[sl.id] = agora;
     touch();
   }
 
@@ -120,12 +227,20 @@ class AppState extends ChangeNotifier {
       transpose: Map.of(sl.transpose),
     );
     setlists.insert(0, c);
+    _setSnaps[c.id] = _snapOfSet(c);
+    _log('duplicou', 'repertorio', c.name,
+        id: c.id, details: ['Cópia de "${sl.name}"']);
     touch();
     return c;
   }
 
   void deleteSetlist(String id) {
+    final sl = setlists.where((s) => s.id == id).firstOrNull;
     setlists.removeWhere((s) => s.id == id);
+    _setSnaps.remove(id);
+    _log('excluiu', 'repertorio', sl?.name ?? id, id: id, details: [
+      if (sl != null) '${sl.songIds.length} música(s) na lista',
+    ]);
     touch();
   }
 
@@ -134,13 +249,18 @@ class AppState extends ChangeNotifier {
     touch();
   }
 
+  /// Registra algo que não passa pelas mutações (sync, exportação...).
+  void logEvent(String action, String entity, String title,
+          {List<String> details = const []}) =>
+      _log(action, entity, title, details: details);
+
   // ---- backup ----
   String exportJson() => const JsonEncoder.withIndent('  ').convert(_toJson());
 
   /// Importa backup.
   /// replace=true substitui tudo; senão faz merge LWW (mantém o mais recente por updatedAt).
   /// Retorna nº de músicas importadas.
-  int importJson(String text, {bool replace = false}) {
+  int importJson(String text, {bool replace = false, String origem = 'arquivo'}) {
     final j = jsonDecode(text) as Map<String, dynamic>;
     final inSongs = (j['songs'] as List? ?? [])
         .map((e) => Song.fromJson(e as Map<String, dynamic>))
@@ -171,6 +291,17 @@ class AppState extends ChangeNotifier {
     if (j['settings'] != null && replace) {
       settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
     }
+    _resnap();
+    final doDrive = origem == 'drive';
+    _log(doDrive ? 'sincronizou' : 'importou', 'backup',
+        doDrive
+            ? (replace ? 'Baixou do Drive (substituiu)' : 'Sync com o Drive')
+            : (replace ? 'Importou backup (substituiu)' : 'Importou backup (mesclou)'),
+        details: [
+          '${inSongs.length} música(s) recebida(s)',
+          '${inSets.length} repertório(s) recebido(s)',
+          'Total agora: ${songs.length} música(s), ${setlists.length} repertório(s)',
+        ]);
     touch();
     return inSongs.length;
   }

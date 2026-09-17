@@ -20,6 +20,7 @@ dependencies:
   printing: ^5.13.0
   pdf: ^3.11.1
   share_plus: ^10.1.4
+  archive: ^4.0.9 # .docx é um zip de XMLs
 
 dev_dependencies:
   flutter_test:

@@ -117,7 +117,7 @@ class SyncState extends ChangeNotifier {
     return _run(() async {
       final raw = await _downloadRaw();
       if (raw == null) throw 'Nenhum backup no Drive';
-      app.importJson(raw, replace: true);
+      app.importJson(raw, replace: true, origem: 'drive');
     });
   }
 
@@ -125,7 +125,7 @@ class SyncState extends ChangeNotifier {
   Future<bool> sync(AppState app) async {
     return _run(() async {
       final raw = await _downloadRaw();
-      if (raw != null) app.importJson(raw, replace: false);
+      if (raw != null) app.importJson(raw, replace: false, origem: 'drive');
       final api = await _api();
       if (api == null) throw 'Sem autenticação';
       final bytes = utf8.encode(app.exportJson());

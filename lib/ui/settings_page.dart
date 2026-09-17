@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/pedal.dart';
 import '../data/store.dart';
 import '../sync/drive_sync.dart';
+import 'audit_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -103,6 +104,19 @@ class SettingsPage extends StatelessWidget {
               title: const Text('Importar (JSON)'),
               subtitle: const Text('Cola o backup'),
               onTap: () => _import(context, st),
+            ),
+          ]),
+          _card('Histórico', [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.history),
+              title: const Text('Ver histórico'),
+              subtitle: Text(st.audit.isEmpty
+                  ? 'Nada registrado ainda'
+                  : '${st.audit.length} registro(s)'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AuditPage())),
             ),
           ]),
           _card('Google Drive', [_drive(context, st)]),

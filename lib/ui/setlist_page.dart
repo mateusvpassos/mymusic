@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/chord_engine.dart';
+import '../core/docx_export.dart';
 import '../core/image_export.dart';
 import '../core/pdf_export.dart';
 import '../core/text_export.dart';
@@ -9,6 +11,13 @@ import 'song_view_page.dart';
 
 String _fmtDate(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+/// Cifras já no tom escolhido no repertório — é isso que tem que sair na
+/// exportação, não o tom original da música.
+List<Song> _noTomDoRepertorio(Setlist sl, List<Song> songs) => songs.map((s) {
+      final steps = sl.transpose[s.id] ?? 0;
+      return steps == 0 ? s : ChordEngine.transposeSong(s, steps);
+    }).toList();
 
 Color _strong(int seed) {
   final hsl = HSLColor.fromColor(Color(seed));
@@ -79,21 +88,29 @@ class SetlistPage extends StatelessWidget {
             tooltip: 'Exportar',
             enabled: songs.isNotEmpty,
             onSelected: (v) {
+              final cor = _strong(st.settings.seedColor);
+              final cifras = _noTomDoRepertorio(sl, songs);
               if (v == 'img') {
                 ImageExport.shareSetlist(
                   sl.name,
                   songs.map((s) => s.title).toList(),
-                  chordColor: _strong(st.settings.seedColor),
+                  chordColor: cor,
                 );
               } else if (v == 'txt') {
                 TextExport.shareSetlistLyrics(sl.name, songs);
               } else if (v == 'pdf') {
-                PdfExport.printSetlist(sl.name, songs,
-                    colorArgb: _strong(st.settings.seedColor).toARGB32());
+                PdfExport.printSetlist(sl.name, cifras,
+                    colorArgb: cor.toARGB32());
+              } else if (v == 'docx') {
+                DocxExport.shareSetlist(sl.name, cifras, chordColor: cor);
               }
+              st.logEvent('exportou', 'repertorio', sl.name,
+                  details: ['Formato: ${v.toUpperCase()}',
+                    '${songs.length} música(s)']);
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'pdf', child: Text('PDF (todas as cifras)')),
+              PopupMenuItem(value: 'docx', child: Text('Word (.docx)')),
               PopupMenuItem(value: 'img', child: Text('Imagem da lista')),
               PopupMenuItem(value: 'txt', child: Text('Letras (TXT) — cantores')),
             ],
