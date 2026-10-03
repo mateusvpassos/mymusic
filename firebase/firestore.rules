@@ -2,6 +2,11 @@ rules_version = '2';
 
 // MyMusic — biblioteca compartilhada por grupo (banda, coral, ministério...).
 //
+// acervo/{id}                      acervo geral: qualquer pessoa logada vê; dono + editores mudam
+// acervo/{id}/versoes/{n}          histórico de cada música do acervo (imutável)
+// acervoSugestoes/{id}             sugestão p/ música do acervo
+// confianca/{dono}                 quem mexe em TODO o acervo de {dono}
+// pessoas/{email}                  nome de cada usuário
 // grupos/{g}                       nome, dono (e-mail), membros [e-mails]
 // grupos/{g}/pessoas/{email}       nome de quem é do grupo
 // grupos/{g}/confianca/{dono}      editores [e-mails] que mexem em TODAS as músicas/repertórios de {dono}
@@ -38,8 +43,61 @@ service cloud.firestore {
       return eu() == d.dono || eu() in d.get('editores', []) || confia(g, d.dono);
     }
 
+    // ---- acervo geral ----
+    function confiaAcervo(dono) {
+      let p = /databases/$(database)/documents/confianca/$(dono);
+      return exists(p) && eu() in get(p).data.editores;
+    }
+
+    function podeEditarAcervo(d) {
+      return eu() == d.dono || eu() in d.get('editores', []) || confiaAcervo(d.dono);
+    }
+
     function soMudou(campos) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    match /pessoas/{email} {
+      allow read: if eu() != '';
+      allow write: if eu() == email;
+    }
+
+    match /confianca/{dono} {
+      allow read: if eu() != '';
+      allow write: if eu() == dono;
+    }
+
+    match /acervo/{id} {
+      allow read: if eu() != '';
+      allow create: if eu() != '' && request.resource.data.dono == eu()
+        && request.resource.data.get('editores', []) is list;
+      allow update: if podeEditarAcervo(resource.data)
+        && request.resource.data.dono == resource.data.dono
+        && (eu() == resource.data.dono
+            || (request.resource.data.get('editores', []) == resource.data.get('editores', [])
+                && request.resource.data.get('apagada', false) == resource.data.get('apagada', false)));
+      allow delete: if false;
+
+      match /versoes/{n} {
+        allow read: if eu() != '';
+        allow create: if request.resource.data.por == eu()
+          && podeEditarAcervo(getAfter(/databases/$(database)/documents/acervo/$(id)).data);
+        allow update, delete: if false;
+      }
+    }
+
+    match /acervoSugestoes/{id} {
+      allow read: if eu() != '';
+      allow create: if eu() != '' && request.resource.data.por == eu()
+        && request.resource.data.status == 'pendente';
+      allow update: if resource.data.status == 'pendente' && (
+        (request.resource.data.status in ['aceita', 'recusada']
+          && request.resource.data.decididoPor == eu()
+          && podeEditarAcervo(get(/databases/$(database)/documents/acervo/$(resource.data.songId)).data)
+          && soMudou(['status', 'decididoPor', 'decididoPorNome', 'decididoEm', 'motivo']))
+        || (request.resource.data.status == 'cancelada' && resource.data.por == eu()
+          && soMudou(['status', 'decididoEm'])));
+      allow delete: if false;
     }
 
     match /grupos/{g} {

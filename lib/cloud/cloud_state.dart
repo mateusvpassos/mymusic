@@ -32,9 +32,10 @@ class Grupo {
 class Sugestao {
   final String id, songId, titulo, por, porNome, status, dono;
   final String decididoPor, decididoPorNome, motivo, nota;
-  final int base; // versão da música quando foi sugerida
+  final int base; // revisão da música quando foi sugerida
   final Song song;
   final DateTime? em, decididoEm;
+  final bool acervo; // sugestão p/ o acervo geral (não p/ o grupo)
 
   const Sugestao({
     required this.id,
@@ -52,13 +53,18 @@ class Sugestao {
     required this.song,
     this.em,
     this.decididoEm,
+    this.acervo = false,
   });
 
   bool get pendente => status == 'pendente';
 
-  factory Sugestao.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+  factory Sugestao.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> d, {
+    bool acervo = false,
+  }) {
     final j = d.data() ?? const {};
     return Sugestao(
+      acervo: acervo,
       id: d.id,
       songId: (j['songId'] ?? '') as String,
       titulo: (j['titulo'] ?? '') as String,
@@ -71,9 +77,9 @@ class Sugestao {
       motivo: (j['motivo'] ?? '') as String,
       nota: (j['nota'] ?? '') as String,
       base: ((j['base'] ?? 0) as num).toInt(),
-      song: Song.fromJson(_norm(j['song'] ?? {'id': '', 'title': ''})),
-      em: _data(j['em']),
-      decididoEm: _data(j['decididoEm']),
+      song: Song.fromJson(normFirestore(j['song'] ?? {'id': '', 'title': ''})),
+      em: dataFirestore(j['em']),
+      decididoEm: dataFirestore(j['decididoEm']),
     );
   }
 }
@@ -101,11 +107,11 @@ class Versao {
     return Versao(
       d.id,
       ((j['n'] ?? 0) as num).toInt(),
-      Song.fromJson(_norm(j['song'])),
+      Song.fromJson(normFirestore(j['song'])),
       (j['por'] ?? '') as String,
       (j['porNome'] ?? '') as String,
       (j['acao'] ?? '') as String,
-      _data(j['em']),
+      dataFirestore(j['em']),
       ((j['resumo'] as List?) ?? const []).cast<String>(),
     );
   }
@@ -113,10 +119,10 @@ class Versao {
 
 /// Mapa do Firestore -> JSON puro (mapas aninhados vêm com tipos genéricos
 /// que os fromJson do modelo não aceitam).
-Map<String, dynamic> _norm(dynamic m) =>
+Map<String, dynamic> normFirestore(dynamic m) =>
     jsonDecode(jsonEncode(m)) as Map<String, dynamic>;
 
-DateTime? _data(dynamic v) {
+DateTime? dataFirestore(dynamic v) {
   if (v is Timestamp) return v.toDate();
   if (v is String) return DateTime.tryParse(v);
   return null;
@@ -364,10 +370,23 @@ class CloudState extends ChangeNotifier {
 
   /// Quem pode editar TODAS as minhas músicas e repertórios sem pedir.
   Future<void> setConfianca(List<String> emails) async {
+    if (user == null) return;
+    // vale p/ o acervo geral e p/ o grupo
+    await _semEsperar(
+      _db.collection('confianca').doc(eu).set({'editores': emails}),
+    );
     if (!ativa) return;
     await _semEsperar(
       _g.collection('confianca').doc(eu).set({'editores': emails}),
     );
+  }
+
+  /// Muda só campos de ligação (ex.: de qual versão do acervo veio), sem
+  /// criar revisão nova.
+  Future<void> atualizarCampos(Song s, Map<String, dynamic> campos) async {
+    app.touch();
+    if (!ativa || !_songsNaNuvem.contains(s.id) || !podeEditarSong(s)) return;
+    await _semEsperar(_g.collection('musicas').doc(s.id).update(campos));
   }
 
   void _abrirGrupo(Grupo g) {
@@ -687,7 +706,7 @@ class CloudState extends ChangeNotifier {
         );
         continue;
       }
-      final s = Song.fromJson(_norm(j));
+      final s = Song.fromJson(normFirestore(j));
       _ultimaDaNuvem[d.id] = s.copy();
       app.applyCloudSong(s, forcar: !podeEditarSong(s));
     }
@@ -714,7 +733,7 @@ class CloudState extends ChangeNotifier {
         );
         continue;
       }
-      final sl = Setlist.fromJson(_norm(j));
+      final sl = Setlist.fromJson(normFirestore(j));
       app.applyCloudSetlist(sl, forcar: !podeEditarSetlist(sl));
     }
     notifyListeners();

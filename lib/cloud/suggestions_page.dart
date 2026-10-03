@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/store.dart';
+import 'acervo.dart';
 import 'cloud_state.dart';
 import 'diff_view.dart';
 
@@ -11,7 +12,12 @@ class SuggestionsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<CloudState>();
-    final decidir = c.paraDecidir, minhas = c.minhas;
+    final a = context.watch<AcervoState>();
+    int porData(Sugestao x, Sugestao y) =>
+        (y.em ?? DateTime(0)).compareTo(x.em ?? DateTime(0));
+    // grupo + acervo geral numa lista só
+    final decidir = [...c.paraDecidir, ...a.paraDecidir]..sort(porData);
+    final minhas = [...c.minhas, ...a.minhas]..sort(porData);
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -54,7 +60,7 @@ class SuggestionsPage extends StatelessWidget {
           child: ListTile(
             leading: _StatusIcon(x.status),
             title: Text(
-              x.titulo,
+              '${x.acervo ? 'Acervo · ' : ''}${x.titulo}',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             subtitle: Text(
@@ -111,16 +117,19 @@ class SuggestionDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<CloudState>();
     final st = context.watch<AppState>();
-    final x = c.sugestoes.where((s) => s.id == id).firstOrNull;
+    final ac = context.watch<AcervoState>();
+    final x = [...c.sugestoes, ...ac.sugestoes].where((s) => s.id == id).firstOrNull;
     if (x == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('Sugestão não encontrada')),
       );
     }
-    final atual = st.songById(x.songId);
-    final podeDecidir =
-        x.pendente && x.por != c.eu && atual != null && c.podeEditarSong(atual);
+    final atual = x.acervo ? ac.musicas[x.songId] : st.songById(x.songId);
+    final podeDecidir = x.pendente &&
+        x.por != c.eu &&
+        atual != null &&
+        (x.acervo ? ac.podeEditar(atual) : c.podeEditarSong(atual));
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(x.titulo)),
@@ -191,7 +200,7 @@ class SuggestionDetailPage extends StatelessWidget {
                           icon: const Icon(Icons.check),
                           label: const Text('Aceitar'),
                           onPressed: () async {
-                            await c.aceitar(x);
+                            await (x.acervo ? ac.aceitar(x) : c.aceitar(x));
                             if (context.mounted) Navigator.pop(context);
                           },
                         ),
@@ -202,7 +211,7 @@ class SuggestionDetailPage extends StatelessWidget {
                           icon: const Icon(Icons.undo),
                           label: const Text('Desistir da sugestão'),
                           onPressed: () async {
-                            await c.cancelar(x);
+                            await (x.acervo ? ac.cancelar(x) : c.cancelar(x));
                             if (context.mounted) Navigator.pop(context);
                           },
                         ),
@@ -237,7 +246,9 @@ class SuggestionDetailPage extends StatelessWidget {
       ),
     );
     if (ok == true) {
-      await c.recusar(x, motivo: ctrl.text.trim());
+      await (x.acervo
+          ? context.read<AcervoState>().recusar(x, motivo: ctrl.text.trim())
+          : c.recusar(x, motivo: ctrl.text.trim()));
       if (context.mounted) Navigator.pop(context);
     }
   }

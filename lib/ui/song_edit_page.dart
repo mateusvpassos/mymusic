@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../cloud/acervo.dart';
 import '../cloud/cloud_state.dart';
 import '../core/chord_engine.dart';
 import '../core/liturgia.dart';
@@ -20,7 +21,10 @@ class SongEditPage extends StatefulWidget {
   /// Música nova: só entra na biblioteca quando salvar (antes ficava uma
   /// "Nova música" vazia pra trás se a pessoa desistisse).
   final Song? novo;
-  const SongEditPage({super.key, required this.songId, this.novo});
+
+  /// Versão do acervo geral (salvar grava lá, ou sugere ao dono).
+  final Song? acervo;
+  const SongEditPage({super.key, required this.songId, this.novo, this.acervo});
   @override
   State<SongEditPage> createState() => _SongEditPageState();
 
@@ -78,10 +82,15 @@ class _SongEditPageState extends State<SongEditPage> {
     super.initState();
     SongEditPage.openCount++;
     final src =
-        widget.novo ?? context.read<AppState>().songById(widget.songId)!;
+        widget.acervo ??
+        widget.novo ??
+        context.read<AppState>().songById(widget.songId)!;
     final cloud = context.read<CloudState>();
-    _sugestao = widget.novo == null && !cloud.podeEditarSong(src);
-    _donoNome = cloud.nomeDe(src.dono);
+    final acervo = context.read<AcervoState>();
+    _sugestao = widget.acervo != null
+        ? !acervo.podeEditar(src)
+        : widget.novo == null && !cloud.podeEditarSong(src);
+    _donoNome = widget.acervo != null ? acervo.nomeDe(src.dono) : cloud.nomeDe(src.dono);
     _song = src.copy();
     ChordEngine.trimSectionEnds(_song.sections);
     _title = TextEditingController(text: _song.title);
@@ -202,7 +211,11 @@ class _SongEditPageState extends State<SongEditPage> {
     if (_sugestao) {
       final nota = await _pedirNota();
       if (nota == null || !mounted) return;
-      await context.read<CloudState>().sugerir(_song, nota: nota);
+      if (widget.acervo != null) {
+        await context.read<AcervoState>().sugerir(_song, nota: nota);
+      } else {
+        await context.read<CloudState>().sugerir(_song, nota: nota);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sugestão enviada — $_donoNome decide se aceita')),
@@ -210,7 +223,11 @@ class _SongEditPageState extends State<SongEditPage> {
       Navigator.pop(context);
       return;
     }
-    context.read<AppState>().upsertSong(_song);
+    if (widget.acervo != null) {
+      context.read<AcervoState>().salvar(_song);
+    } else {
+      context.read<AppState>().upsertSong(_song);
+    }
     Navigator.pop(context);
   }
 
@@ -334,7 +351,10 @@ class _SongEditPageState extends State<SongEditPage> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_sugestao ? 'Sugerir mudança' : 'Editar'),
+        title: Text(
+          '${_sugestao ? 'Sugerir mudança' : 'Editar'}'
+          '${widget.acervo != null ? ' — acervo (${AcervoState.rotulo(widget.acervo!)})' : ''}',
+        ),
         actions: [
           IconButton(
             tooltip: 'Desfazer',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'cloud/acervo.dart';
 import 'cloud/cloud_config.dart';
 import 'cloud/cloud_state.dart';
 import 'data/store.dart';
@@ -16,12 +17,15 @@ void main() {
   final sync = SyncState();
   final live = LiveSession(state);
   final cloud = CloudState(state);
+  final acervo = AcervoState(cloud, state);
   // com o grupo da nuvem ligado é ele que sincroniza; o Drive vira só backup
   // (dois caminhos mesclando a mesma música davam versão misturada)
   state.onPersist = () {
     if (!state.cloudAtiva && !CloudConfig.emulador) sync.scheduleAuto(state);
   };
-  runApp(MyApp(state: state, sync: sync, live: live, cloud: cloud));
+  runApp(
+    MyApp(state: state, sync: sync, live: live, cloud: cloud, acervo: acervo),
+  );
   // sync só depois do arquivo local carregado: antes os dois corriam juntos e,
   // se a leitura terminasse por último, apagava o que o sync tinha mesclado
   _boot(state, sync, cloud);
@@ -42,7 +46,9 @@ class MyApp extends StatelessWidget {
   final SyncState sync;
   final LiveSession live;
   final CloudState cloud;
+  final AcervoState acervo;
   const MyApp({
+    required this.acervo,
     super.key,
     required this.state,
     required this.sync,
@@ -58,6 +64,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: sync),
         ChangeNotifierProvider.value(value: live),
         ChangeNotifierProvider.value(value: cloud),
+        ChangeNotifierProvider.value(value: acervo),
       ],
       child: Consumer<AppState>(
         builder: (context, st, _) {

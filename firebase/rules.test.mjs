@@ -117,3 +117,44 @@ test('grupo: só o dono convida', async () => {
 test('apagar de verdade não pode (vira lápide)', async () => {
   await assertFails(deleteDoc(doc(db(DONO), `grupos/${g}/musicas/m1`)));
 });
+
+// ---------------- acervo geral ----------------
+
+test('acervo: qualquer logado lê; ninguém sem login', async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'acervo/a1'), musica(DONO, { id: 'a1' })));
+  await assertSucceeds(getDoc(doc(db(FORA), 'acervo/a1')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'acervo/a1')));
+});
+
+test('acervo: cria como dono; outro não edita, sugere; dono decide', async () => {
+  await assertSucceeds(setDoc(doc(db(ANA), 'acervo/a2'), musica(ANA, { id: 'a2' })));
+  await assertFails(setDoc(doc(db(ANA), 'acervo/a3'), musica(DONO, { id: 'a3' })));
+  await assertFails(updateDoc(doc(db(BIA), 'acervo/a2'), { title: 'x' }));
+  // versão nova da mesma obra, da Bia
+  await assertSucceeds(setDoc(doc(db(BIA), 'acervo/a4'), musica(BIA, { id: 'a4', obra: 'a2', nomeVersao: 'Simplificada' })));
+  const sug = { songId: 'a2', por: BIA, status: 'pendente', song: { title: 'y' } };
+  await assertSucceeds(setDoc(doc(db(BIA), 'acervoSugestoes/s1'), sug));
+  await assertFails(updateDoc(doc(db(BIA), 'acervoSugestoes/s1'), { status: 'aceita', decididoPor: BIA }));
+  await assertSucceeds(updateDoc(doc(db(ANA), 'acervoSugestoes/s1'), { status: 'aceita', decididoPor: ANA }));
+});
+
+test('acervo: confiança global libera tudo do dono', async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'acervo/a5'), musica(DONO, { id: 'a5' })));
+  await assertFails(setDoc(doc(db(ANA), `confianca/${DONO}`), { editores: [ANA] }));
+  await assertSucceeds(setDoc(doc(db(DONO), `confianca/${DONO}`), { editores: [ANA] }));
+  await assertSucceeds(updateDoc(doc(db(ANA), 'acervo/a5'), { title: 'z' }));
+  await assertFails(updateDoc(doc(db(ANA), 'acervo/a5'), { apagada: true }));
+});
+
+test('acervo: revisão só junto com gravação permitida', async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'acervo/a6'), musica(DONO, { id: 'a6' })));
+  const f = db(DONO);
+  const b = writeBatch(f);
+  b.update(doc(f, 'acervo/a6'), { title: 'n', versao: 2 });
+  b.set(doc(f, 'acervo/a6/versoes/r2'), { n: 2, por: DONO, song: {} });
+  await assertSucceeds(b.commit());
+  await assertFails(setDoc(doc(db(BIA), 'acervo/a6/versoes/r3'), { n: 3, por: BIA, song: {} }));
+});

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'acervo.dart';
 import 'cloud_state.dart';
 
 /// Dono e quem mais pode editar (música ou repertório). Só o dono muda.
@@ -9,6 +10,7 @@ Future<void> showPermissions(
   required String dono,
   required List<String> editores,
   required Future<void> Function(List<String>) salvar,
+  bool acervo = false,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -18,6 +20,7 @@ Future<void> showPermissions(
       dono: dono,
       editores: editores,
       salvar: salvar,
+      acervo: acervo,
     ),
   );
 }
@@ -26,7 +29,9 @@ class _Permissoes extends StatefulWidget {
   final String titulo, dono;
   final List<String> editores;
   final Future<void> Function(List<String>) salvar;
+  final bool acervo;
   const _Permissoes({
+    this.acervo = false,
     required this.titulo,
     required this.dono,
     required this.editores,
@@ -42,11 +47,14 @@ class _PermissoesState extends State<_Permissoes> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<CloudState>();
-    final souDono = c.souDono(widget.dono);
-    final outros = (c.grupo?.membros ?? const <String>[])
+    final a = context.watch<AcervoState>();
+    // acervo: qualquer pessoa do app; grupo: só quem é do grupo
+    final souDono = widget.acervo ? widget.dono == c.eu : c.souDono(widget.dono);
+    final outros = (widget.acervo ? a.nomes.keys.toList() : (c.grupo?.membros ?? const <String>[]))
         .where((m) => m != widget.dono)
         .toList();
-    final confiados = c.confianca[widget.dono] ?? const <String>[];
+    final confiados = (widget.acervo ? a.confianca : c.confianca)[widget.dono] ?? const <String>[];
+    String nomeDe(String e) => widget.acervo ? a.nomeDe(e) : c.nomeDe(e);
     final scheme = Theme.of(context).colorScheme;
     return SafeArea(
       child: Padding(
@@ -60,7 +68,7 @@ class _PermissoesState extends State<_Permissoes> {
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
             ),
             const SizedBox(height: 4),
-            Text('Dono: ${c.nomeDe(widget.dono)}'),
+            Text('Dono: ${nomeDe(widget.dono)}'),
             const SizedBox(height: 12),
             Text(
               souDono
@@ -75,11 +83,11 @@ class _PermissoesState extends State<_Permissoes> {
               children: [
                 for (final m in outros)
                   FilterChip(
-                    label: Text(c.nomeDe(m)),
+                    label: Text(nomeDe(m)),
                     // liberado p/ tudo do dono: marcado e travado
                     selected: _ed.contains(m) || confiados.contains(m),
                     tooltip: confiados.contains(m)
-                        ? 'Liberado para tudo de ${c.nomeDe(widget.dono)}'
+                        ? 'Liberado para tudo de ${nomeDe(widget.dono)}'
                         : null,
                     onSelected: !souDono || confiados.contains(m)
                         ? null

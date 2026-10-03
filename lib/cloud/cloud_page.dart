@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'acervo.dart';
 import 'cloud_config.dart';
 import 'cloud_state.dart';
 
@@ -55,6 +56,7 @@ class _CloudPageState extends State<CloudPage> {
               _pessoas(context, c),
               _confianca(context, c),
               _envio(context, c),
+              _acervo(context),
             ],
           ],
           if (c.erro != null)
@@ -341,6 +343,52 @@ class _CloudPageState extends State<CloudPage> {
                 ),
             ],
           ),
+      ],
+    );
+  }
+
+  Widget _acervo(BuildContext context) {
+    final a = context.watch<AcervoState>();
+    if (!a.carregou) return const SizedBox.shrink();
+    final falta = a.naoPublicadas;
+    return _card(
+      context,
+      icon: Icons.public,
+      titulo: 'Acervo geral',
+      children: [
+        Text(
+          falta.isEmpty
+              ? 'Todas as suas músicas estão no acervo. ${a.obras.length} músicas no acervo ao todo.'
+              : '${falta.length} música(s) suas ainda não estão no acervo geral. '
+                    'Publicando, todo mundo do app pode ver e puxar (você continua '
+                    'dono; os outros sugerem). O grupo segue com as cópias dele.',
+        ),
+        if (falta.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            icon: const Icon(Icons.publish),
+            label: Text('Publicar ${falta.length} no acervo'),
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Publicar no acervo geral?'),
+                  content: Text(
+                    '${falta.length} música(s) ficam visíveis para todos que usam o app.',
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                    FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Publicar')),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              for (final s in falta) {
+                a.publicar(s);
+              }
+            },
+          ),
+        ],
       ],
     );
   }

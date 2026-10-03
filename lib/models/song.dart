@@ -70,6 +70,14 @@ class Song {
   int versao;
   String por;
   String porNome;
+  // acervo geral: a mesma música (obra) pode ter várias versões/arranjos
+  // ("Original", "Simplificada", "Versão rcc"). [obra] vazio = é a própria.
+  String obra;
+  String nomeVersao;
+  // de qual versão do acervo esta veio (e em que revisão), p/ avisar quando
+  // a do acervo mudar
+  String baseId;
+  int baseRev;
   DateTime updatedAt;
 
   Song({
@@ -91,6 +99,10 @@ class Song {
     this.versao = 0,
     this.por = '',
     this.porNome = '',
+    this.obra = '',
+    this.nomeVersao = '',
+    this.baseId = '',
+    this.baseRev = 0,
     DateTime? updatedAt,
   }) : sections = sections ?? [],
        editores = editores ?? [],
@@ -114,6 +126,10 @@ class Song {
     if (momentos.isNotEmpty) 'momentos': momentos,
     ..._metaJson(dono, donoNome, editores, por, porNome),
     if (versao > 0) 'versao': versao,
+    if (obra.isNotEmpty) 'obra': obra,
+    if (nomeVersao.isNotEmpty) 'nomeVersao': nomeVersao,
+    if (baseId.isNotEmpty) 'baseId': baseId,
+    if (baseRev > 0) 'baseRev': baseRev,
     'updatedAt': updatedAt.toIso8601String(),
   };
 
@@ -138,6 +154,10 @@ class Song {
     versao: ((j['versao'] ?? 0) as num).toInt(),
     por: (j['por'] ?? '') as String,
     porNome: (j['porNome'] ?? '') as String,
+    obra: (j['obra'] ?? '') as String,
+    nomeVersao: (j['nomeVersao'] ?? '') as String,
+    baseId: (j['baseId'] ?? '') as String,
+    baseRev: ((j['baseRev'] ?? 0) as num).toInt(),
     updatedAt:
         DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
   );
@@ -161,6 +181,10 @@ class Song {
     versao: versao,
     por: por,
     porNome: porNome,
+    obra: obra,
+    nomeVersao: nomeVersao,
+    baseId: baseId,
+    baseRev: baseRev,
     updatedAt: updatedAt,
   );
 }

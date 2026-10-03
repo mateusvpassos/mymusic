@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mymusic/cloud/acervo.dart';
 import 'package:mymusic/cloud/cloud_state.dart';
 import 'package:mymusic/data/store.dart';
 import 'package:mymusic/models/song.dart';
@@ -11,6 +12,9 @@ Widget _app(AppState st, Widget page) => MultiProvider(
         ChangeNotifierProvider.value(value: st),
         // nuvem desligada (sem Firebase no teste): tudo editável
         ChangeNotifierProvider(create: (_) => CloudState(st)),
+        ChangeNotifierProvider(
+          create: (c) => AcervoState(c.read<CloudState>(), st),
+        ),
       ],
       child: MaterialApp(
         home: Builder(

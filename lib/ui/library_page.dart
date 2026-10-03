@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
+import '../cloud/acervo.dart';
+import '../cloud/acervo_page.dart';
 import '../cloud/cloud_page.dart';
 import '../cloud/cloud_state.dart';
 import '../cloud/suggestions_page.dart';
@@ -542,12 +544,22 @@ class _CloudButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<CloudState>();
+    final a = context.watch<AcervoState>();
     if (!c.disponivel) return const SizedBox.shrink();
-    final n = c.paraDecidir.length;
+    final n = c.paraDecidir.length + a.paraDecidir.length;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (c.ativa)
+        if (c.user != null)
+          IconButton(
+            tooltip: 'Acervo geral',
+            icon: const Icon(Icons.public),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AcervoPage()),
+            ),
+          ),
+        if (c.user != null)
           IconButton(
             tooltip: 'Sugestões',
             icon: Badge(

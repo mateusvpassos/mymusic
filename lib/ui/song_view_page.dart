@@ -4,7 +4,10 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../cloud/acervo.dart';
+import '../cloud/acervo_page.dart';
 import '../cloud/cloud_state.dart';
+import '../cloud/diff_view.dart';
 import '../cloud/permissions_sheet.dart';
 import '../cloud/versions_page.dart';
 import '../core/chord_engine.dart';
@@ -492,6 +495,14 @@ class _SongViewPageState extends State<SongViewPage>
     final letra = st.settings.lyricsOnly;
     // só letra: maior, p/ ler de longe cantando
     final fontSize = 18.0 * st.settings.fontScale * (letra ? 1.3 : 1.0);
+    // de qual versão do acervo veio (quando a obra tem mais de uma)
+    final acervo = context.watch<AcervoState>();
+    final origem = acervo.baseDe(base);
+    final versaoAcervo =
+        origem != null &&
+            acervo.versoesDaObra(AcervoState.obraDe(origem)).length > 1
+        ? AcervoState.rotulo(origem)
+        : null;
     final momento = widget.setlistId == null
         ? null
         : st.setlistById(widget.setlistId!)?.moments[_songId];
@@ -521,6 +532,7 @@ class _SongViewPageState extends State<SongViewPage>
                     ),
                     Text(
                       '${momento != null ? '$momento  •  ' : ''}'
+                      '${versaoAcervo != null ? '$versaoAcervo  •  ' : ''}'
                       '${shown.key}'
                       '${base.capo > 0 ? '  •  capo ${base.capo}${_capo ? '' : ' (off)'}' : ''}'
                       '${_transpose != 0 ? '  •  ${_transpose > 0 ? '+' : ''}$_transpose' : ''}'
@@ -606,40 +618,8 @@ class _SongViewPageState extends State<SongViewPage>
                     tooltip: 'Tela cheia',
                     onPressed: _toggleFull,
                   ),
-                  if (context.watch<CloudState>().ativa)
-                    PopupMenuButton<String>(
-                      tooltip: 'Histórico e permissões',
-                      icon: const Icon(Icons.history),
-                      onSelected: (v) {
-                        final c = context.read<CloudState>();
-                        if (v == 'hist') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => VersionsPage(songId: base.id),
-                            ),
-                          ).then((_) => _aplicarPendente());
-                        } else {
-                          showPermissions(
-                            context,
-                            titulo: base.title,
-                            dono: base.dono,
-                            editores: base.editores,
-                            salvar: (l) => c.setEditoresSong(base, l),
-                          );
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'hist',
-                          child: Text('Histórico e versões'),
-                        ),
-                        PopupMenuItem(
-                          value: 'perm',
-                          child: Text('Dono e quem pode editar'),
-                        ),
-                      ],
-                    ),
+                  if (context.watch<CloudState>().user != null)
+                    _menuNuvem(base),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Editar',
@@ -656,6 +636,7 @@ class _SongViewPageState extends State<SongViewPage>
           children: [
             if (!_full && !letra && uniqueChords.isNotEmpty)
               _chordBar(uniqueChords, scheme, chordColor),
+            if (!_full) _avisoAcervo(base),
             if (!_full && base.notes.isNotEmpty)
               Container(
                 width: double.infinity,
@@ -807,6 +788,148 @@ class _SongViewPageState extends State<SongViewPage>
           ],
         ),
         bottomNavigationBar: _full ? null : _toolbar(st, base, scheme),
+      ),
+    );
+  }
+
+  // ---- acervo geral / grupo ----
+
+  Widget _menuNuvem(Song base) {
+    final c = context.read<CloudState>();
+    final a = context.watch<AcervoState>();
+    final origem = a.baseDe(base);
+    final minha = base.dono.isEmpty || base.dono == c.eu;
+    // mudou algo em relação à versão do acervo (cifra, tom, anotações...)
+    final diferente =
+        origem != null && AppState.resumoMudancas(origem, base).isNotEmpty;
+    return PopupMenuButton<String>(
+      tooltip: 'Histórico, acervo e permissões',
+      icon: const Icon(Icons.history),
+      onSelected: (v) async {
+        switch (v) {
+          case 'hist':
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => VersionsPage(songId: base.id)),
+            );
+            _aplicarPendente();
+          case 'perm':
+            showPermissions(
+              context,
+              titulo: base.title,
+              dono: base.dono,
+              editores: base.editores,
+              salvar: (l) => c.setEditoresSong(base, l),
+            );
+          case 'ver':
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ObraPage(obra: AcervoState.obraDe(origem!), versaoId: origem.id),
+              ),
+            );
+          case 'pub':
+            a.publicar(base);
+            _aviso('"${base.title}" publicada no acervo geral');
+          case 'nova':
+            final nome = await _pedirNome('Publicar como nova versão',
+                'Nome da versão (ex.: Versão ${c.grupo?.nome ?? 'nossa'}, Simplificada)');
+            if (nome == null || nome.isEmpty) return;
+            a.publicar(base, nomeVersao: nome, obra: AcervoState.obraDe(origem!));
+            _aviso('Nova versão "$nome" publicada no acervo');
+        }
+      },
+      itemBuilder: (_) => [
+        if (c.ativa) ...[
+          const PopupMenuItem(value: 'hist', child: Text('Histórico de revisões')),
+          const PopupMenuItem(value: 'perm', child: Text('Dono e quem pode editar')),
+        ],
+        if (origem != null)
+          PopupMenuItem(
+            value: 'ver',
+            child: Text('Ver no acervo (${AcervoState.rotulo(origem)} de ${a.nomeDe(origem.dono)})'),
+          ),
+        if (origem == null && minha)
+          const PopupMenuItem(value: 'pub', child: Text('Publicar no acervo geral')),
+        if (diferente)
+          const PopupMenuItem(value: 'nova', child: Text('Publicar como nova versão no acervo')),
+      ],
+    );
+  }
+
+  /// A versão do acervo de onde esta veio mudou: avisa e deixa atualizar.
+  Widget _avisoAcervo(Song base) {
+    final a = context.watch<AcervoState>();
+    if (!a.temNovidade(base)) return const SizedBox.shrink();
+    final b = a.baseDe(base)!;
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: scheme.tertiaryContainer,
+      padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+      child: Row(
+        children: [
+          Icon(Icons.new_releases_outlined, color: scheme.onTertiaryContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'A versão "${AcervoState.rotulo(b)}" mudou no acervo (revisão ${b.versao}, por ${a.nomeDe(b.por)}).',
+              style: TextStyle(color: scheme.onTertiaryContainer),
+            ),
+          ),
+          TextButton(
+            onPressed: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.8,
+                builder: (_, ctl) => ListView(
+                  controller: ctl,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    const Text('Daqui → acervo', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    DiffView(antes: base, depois: b),
+                  ],
+                ),
+              ),
+            ),
+            child: const Text('Ver o que mudou'),
+          ),
+          FilledButton.tonal(
+            onPressed: context.read<CloudState>().podeEditarSong(base)
+                ? () {
+                    a.atualizarDoAcervo(base);
+                    _aviso('Atualizada com a versão do acervo');
+                  }
+                : null,
+            child: const Text('Atualizar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _aviso(String t) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  Future<String?> _pedirNome(String titulo, String dica) {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(titulo),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(hintText: dica),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Publicar')),
+        ],
       ),
     );
   }
