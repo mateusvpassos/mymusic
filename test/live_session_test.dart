@@ -1,7 +1,6 @@
 // Sessão ao vivo de verdade (sockets em loopback): hub + 2 convidados.
 // Sem TestWidgetsFlutterBinding de propósito: ele troca o HttpClient por um
 // falso que devolve 400, e o WebSocket.connect usa o HttpClient.
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mymusic/data/store.dart';

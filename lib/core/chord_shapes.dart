@@ -103,7 +103,7 @@ class _DiagramPainter extends CustomPainter {
       ..color = color.withValues(alpha: 0.7)
       ..strokeWidth = 1.4;
     final dot = Paint()..color = color;
-    final txt = (String t, Offset o, double fs, {Color? c}) {
+    void txt(String t, Offset o, double fs, {Color? c}) {
       final tp = TextPainter(
         text: TextSpan(
             text: t,
@@ -111,7 +111,7 @@ class _DiagramPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
-    };
+    }
 
     // pestana (casa base) ou nut grosso
     final base = s.baseFret;

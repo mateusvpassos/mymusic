@@ -331,7 +331,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         itemCount: chords.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) => ActionChip(
           label: Text(chords[i],
               style: TextStyle(color: chordColor, fontWeight: FontWeight.w700)),

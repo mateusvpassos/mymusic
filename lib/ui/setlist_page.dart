@@ -125,10 +125,13 @@ class SetlistPage extends StatelessWidget {
           : ReorderableListView.builder(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
               itemCount: songs.length,
-              onReorder: (a, b) {
-                if (b > a) b--;
-                final id = sl.songIds.removeAt(a);
-                sl.songIds.insert(b, id);
+              // índices são da lista VISÍVEL; songIds pode ter música que não
+              // existe mais aqui (excluída em outro aparelho) — por isso
+              // reordena os visíveis e deixa os órfãos no fim
+              onReorderItem: (a, b) {
+                final ids = songs.map((s) => s.id).toList();
+                ids.insert(b, ids.removeAt(a));
+                sl.songIds = [...ids, ...sl.songIds.where((x) => !ids.contains(x))];
                 st.upsertSetlist(sl);
               },
               itemBuilder: (_, i) {

@@ -165,7 +165,7 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
       ),
       floatingActionButton: AnimatedBuilder(
         animation: _tab,
-        builder: (_, __) => _GradientButton(
+        builder: (_, _) => _GradientButton(
           icon: Icons.add,
           label: _tab.index == 0 ? 'Música' : 'Repertório',
           onTap: () => _tab.index == 0 ? _newSong(st) : _newSetlist(st),
@@ -186,7 +186,7 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
       itemCount: list.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) => _songCard(st, list[i]),
     );
   }
@@ -292,7 +292,7 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
       itemCount: list.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
         final sl = list[i];
         return Card(

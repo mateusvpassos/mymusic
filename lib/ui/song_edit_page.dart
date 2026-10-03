@@ -394,12 +394,8 @@ class _SongEditPageState extends State<SongEditPage> {
           child: ReorderableListView(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
             buildDefaultDragHandles: false,
-            onReorder: (a, b) {
-              setState(() {
-                if (b > a) b--;
-                final s = _song.sections.removeAt(a);
-                _song.sections.insert(b, s);
-              });
+            onReorderItem: (a, b) {
+              setState(() => _song.sections.insert(b, _song.sections.removeAt(a)));
               _recordChange();
             },
             footer: Padding(
@@ -519,7 +515,7 @@ class _SongEditPageState extends State<SongEditPage> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _palette.length + 1,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (_, i) {
                   if (i == _palette.length) {
                     return ActionChip(
