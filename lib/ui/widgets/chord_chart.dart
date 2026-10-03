@@ -138,7 +138,16 @@ class ChordChart extends StatelessWidget {
           ),
         ));
       }
-      for (final line in sec.lines) {
+      // linhas em branco no fim da seção são sobra (a seção seguinte já tem
+      // espaço próprio): não desenha — vale p/ música que veio de versão
+      // antiga por sync
+      var fim = sec.lines.length;
+      while (fim > 0 &&
+          sec.lines[fim - 1].chords.isEmpty &&
+          sec.lines[fim - 1].lyric.trim().isEmpty) {
+        fim--;
+      }
+      for (final line in sec.lines.take(fim)) {
         for (final part in wrapLine(line, maxCols)) {
           blocks.add(_line(part, lyricStyle, chordStyle, charW, chordH));
         }

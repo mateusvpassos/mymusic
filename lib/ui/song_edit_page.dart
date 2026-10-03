@@ -44,6 +44,7 @@ class _SongEditPageState extends State<SongEditPage> {
     super.initState();
     final src = context.read<AppState>().songById(widget.songId)!;
     _song = src.copy();
+    ChordEngine.trimSectionEnds(_song.sections);
     _title = TextEditingController(text: _song.title);
     _artist = TextEditingController(text: _song.artist);
     _key = TextEditingController(text: _song.key);

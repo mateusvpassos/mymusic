@@ -176,6 +176,23 @@ class ChordEngine {
     return sections;
   }
 
+  /// Tira as linhas em branco do FIM de cada seção (as de dentro ficam: são
+  /// separação de grupo que o usuário pulou de propósito). Versões antigas do
+  /// editor somavam uma linha em branco a cada troca texto<->visual.
+  /// Devolve true se mudou algo.
+  static bool trimSectionEnds(List<Section> sections) {
+    var mudou = false;
+    for (final s in sections) {
+      while (s.lines.isNotEmpty &&
+          s.lines.last.chords.isEmpty &&
+          s.lines.last.lyric.trim().isEmpty) {
+        s.lines.removeLast();
+        mudou = true;
+      }
+    }
+    return mudou;
+  }
+
   static String serializeSections(List<Section> sections) {
     return sections.map((s) {
       final head = s.name.isNotEmpty ? '#${s.name}\n' : '';

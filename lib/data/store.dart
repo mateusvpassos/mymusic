@@ -50,6 +50,11 @@ class AppState extends ChangeNotifier {
           ..clear()
           ..addAll((j['songs'] as List? ?? [])
               .map((e) => Song.fromJson(e as Map<String, dynamic>)));
+        // limpeza das linhas em branco acumuladas pelo editor antigo; não mexe
+        // no updatedAt (não é edição de verdade, não precisa ganhar no sync)
+        for (final s in songs) {
+          ChordEngine.trimSectionEnds(s.sections);
+        }
         setlists
           ..clear()
           ..addAll((j['setlists'] as List? ?? [])
