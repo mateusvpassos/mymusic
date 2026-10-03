@@ -2,6 +2,7 @@
 // Sem TestWidgetsFlutterBinding de propósito: ele troca o HttpClient por um
 // falso que devolve 400, e o WebSocket.connect usa o HttpClient.
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mymusic/data/store.dart';
 import 'package:mymusic/live/live_session.dart';
@@ -183,6 +184,21 @@ void main() {
     final b = AppState()..settings.deviceName = 'Teclado';
     a.importJson(b.exportJson(), replace: true);
     expect(a.settings.deviceName, 'Violão');
+  });
+
+  test('mensagem malformada não derruba a sessão', () async {
+    final ws = await WebSocket.connect('ws://127.0.0.1:${hub.serverPort}/live');
+    ws.add('isso não é json');
+    ws.add(jsonEncode({'t': 'nav', 'songId': null})); // campo faltando
+    ws.add(jsonEncode({'t': 'song', 'song': {'id': 1}}));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await ws.close();
+    // continua funcionando p/ quem é de verdade
+    final got = <LiveScroll>[];
+    final sub = g1.scrollStream.listen(got.add);
+    hub.publishScroll('x', 0.5);
+    await until(() => got.isNotEmpty, what: 'sessão seguir viva');
+    await sub.cancel();
   });
 
   test('beacon: só aceita o do MyMusic', () {

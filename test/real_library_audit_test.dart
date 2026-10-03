@@ -4,9 +4,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mymusic/core/chord_engine.dart';
+import 'package:mymusic/core/pdf_export.dart';
+import 'package:mymusic/data/store.dart';
 import 'package:mymusic/models/song.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized(); // fontes do PDF vêm dos assets
   final path = Platform.environment['MYMUSIC_DATA'];
   test('auditoria da biblioteca real', () {
     if (path == null) return;
@@ -82,5 +85,23 @@ void main() {
     }
     // ignore: avoid_print
     print('INSTAVEIS NA IDA E VOLTA (${instaveis.length}): ${instaveis.join(' | ')}');
+  });
+
+  test('gera PDF de um repertório real (REPERTORIO=nome)', () async {
+    final nome = Platform.environment['REPERTORIO'];
+    if (path == null || nome == null) return;
+    final st = AppState()
+      ..applyLoaded(jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>);
+    final sl = st.setlists.firstWhere((x) => x.name == nome);
+    final songs = [
+      for (final id in sl.songIds)
+        if (st.songById(id) case final s?)
+          (sl.transpose[id] ?? 0) == 0 ? s : ChordEngine.transposeSong(s, sl.transpose[id]!)
+    ];
+    final doc = await PdfExport.setlistDoc(sl.name, songs);
+    final f = File('build/real-setlist.pdf');
+    await f.writeAsBytes(await doc.save());
+    // ignore: avoid_print
+    print('PDF: ${songs.length} músicas, ${doc.document.pdfPageList.pages.length} páginas');
   });
 }

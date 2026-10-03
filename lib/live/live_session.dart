@@ -153,7 +153,12 @@ class LiveSession extends ChangeNotifier {
         ..close();
       return;
     }
-    final ws = await WebSocketTransformer.upgrade(req);
+    final WebSocket ws;
+    try {
+      ws = await WebSocketTransformer.upgrade(req);
+    } catch (_) {
+      return; // pedido estranho na porta: ignora
+    }
     ws.pingInterval = const Duration(seconds: 4);
     _clients[ws] = '';
     ws.listen(
@@ -496,13 +501,13 @@ class LiveSession extends ChangeNotifier {
   }
 
   void _onRaw(dynamic data, WebSocket? from) {
-    Map<String, dynamic> m;
+    // mensagem malformada (outra versão do app, rede ruim) não pode derrubar
+    // a sessão: descarta e segue
     try {
-      m = jsonDecode(data as String) as Map<String, dynamic>;
-    } catch (_) {
-      return;
+      _handle(jsonDecode(data as String) as Map<String, dynamic>, from);
+    } catch (e) {
+      debugPrint('ao vivo: mensagem ignorada ($e)');
     }
-    _handle(m, from);
   }
 
   String _nameOf(String? id) => peers[id]?.name ?? 'outro aparelho';
