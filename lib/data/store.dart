@@ -41,48 +41,13 @@ class AppState extends ChangeNotifier {
   void Function(Setlist sl)? onLocalSetlist;
 
   Future<void> load() async {
-    var reparadas = 0;
     final dir = await getApplicationDocumentsDirectory();
     _file = File('${dir.path}/mymusic_data.json');
+    var reparadas = 0;
     if (await _file!.exists()) {
       try {
-        final j = jsonDecode(await _file!.readAsString()) as Map<String, dynamic>;
-        songs
-          ..clear()
-          ..addAll((j['songs'] as List? ?? [])
-              .map((e) => Song.fromJson(e as Map<String, dynamic>)));
-        // limpeza das linhas em branco acumuladas pelo editor antigo; não mexe
-        // no updatedAt (não é edição de verdade, não precisa ganhar no sync)
-        for (final s in songs) {
-          ChordEngine.trimSectionEnds(s.sections);
-          // acorde que versão antiga gravou como letra: aí é conserto de
-          // verdade, ganha updatedAt novo p/ chegar nos outros aparelhos
-          final n = ChordEngine.repairChordLines(s.sections);
-          if (n > 0) {
-            s.updatedAt = DateTime.now();
-            reparadas++;
-            _log('editou', 'musica', s.title, id: s.id, details: [
-              'Corrigido automaticamente: $n linha(s) de acorde estavam como letra '
-                  '(não apareciam como acorde nem mudavam de tom)',
-            ]);
-          }
-        }
-        setlists
-          ..clear()
-          ..addAll((j['setlists'] as List? ?? [])
-              .map((e) => Setlist.fromJson(e as Map<String, dynamic>)));
-        if (j['settings'] != null) {
-          settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
-        }
-        audit
-          ..clear()
-          ..addAll((j['audit'] as List? ?? [])
-              .map((e) => AuditEvent.fromJson(e as Map<String, dynamic>)));
-        deleted
-          ..clear()
-          ..addAll(_readTombstones(j['deleted']));
-        final limite = DateTime.now().subtract(const Duration(days: _tombstoneDays));
-        deleted.removeWhere((_, at) => at.isBefore(limite));
+        reparadas = applyLoaded(
+            jsonDecode(await _file!.readAsString()) as Map<String, dynamic>);
       } catch (_) {/* arquivo corrompido: começa vazio */}
     }
     _resnap();
@@ -90,6 +55,54 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     if (reparadas > 0) _scheduleSave();
   }
+
+  /// Monta o estado a partir do JSON gravado. Devolve quantas músicas teve
+  /// que consertar (aí precisa regravar).
+  @visibleForTesting
+  int applyLoaded(Map<String, dynamic> j) {
+    var reparadas = 0;
+    songs
+      ..clear()
+      ..addAll((j['songs'] as List? ?? [])
+          .map((e) => Song.fromJson(e as Map<String, dynamic>)));
+    setlists
+      ..clear()
+      ..addAll((j['setlists'] as List? ?? [])
+          .map((e) => Setlist.fromJson(e as Map<String, dynamic>)));
+    if (j['settings'] != null) {
+      settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
+    }
+    audit
+      ..clear()
+      ..addAll((j['audit'] as List? ?? [])
+          .map((e) => AuditEvent.fromJson(e as Map<String, dynamic>)));
+    deleted
+      ..clear()
+      ..addAll(_readTombstones(j['deleted']));
+    final limite = DateTime.now().subtract(const Duration(days: _tombstoneDays));
+    deleted.removeWhere((_, at) => at.isBefore(limite));
+
+    // Só depois do histórico carregado: o log do conserto entra nele (antes o
+    // clear() do histórico apagava o registro recém-criado).
+    for (final s in songs) {
+      // linhas em branco acumuladas pelo editor antigo: não mexe no
+      // updatedAt (não é edição de verdade, não precisa ganhar no sync)
+      ChordEngine.trimSectionEnds(s.sections);
+      // acorde que versão antiga gravou como letra: aí é conserto de verdade,
+      // ganha updatedAt novo p/ chegar nos outros aparelhos
+      final n = ChordEngine.repairChordLines(s.sections);
+      if (n > 0) {
+        s.updatedAt = DateTime.now();
+        reparadas++;
+        _log('editou', 'musica', s.title, id: s.id, details: [
+          'Corrigido automaticamente: $n linha(s) de acorde estavam como letra '
+              '(não apareciam como acorde nem mudavam de tom)',
+        ]);
+      }
+    }
+    return reparadas;
+  }
+
 
   Map<String, dynamic> _toJson() => {
         'songs': songs.map((s) => s.toJson()).toList(),
