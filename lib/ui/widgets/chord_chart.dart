@@ -22,8 +22,78 @@ class ChordChart extends StatelessWidget {
     return n.contains('refr') || n.contains('chorus') || n.contains('coro');
   }
 
+  /// Quebra uma linha de cifra em pedaços de até [max] colunas.
+  ///
+  /// Corta em espaço da letra e nunca no meio de um acorde: cada acorde vai
+  /// junto com a sílaba dele. A continuação vem recuada 2 colunas, como em
+  /// songbook. Sem isso, verso mais largo que a tela era cortado — sumia o
+  /// fim da letra e os últimos acordes.
+  static List<SongLine> wrapLine(SongLine l, int max) {
+    const indent = 2;
+    if (max < 8) return [l];
+    int ends(SongLine x) {
+      var e = x.lyric.trimRight().length;
+      for (final c in x.chords) {
+        if (c.idx + c.sym.length > e) e = c.idx + c.sym.length;
+      }
+      return e;
+    }
+
+    if (ends(l) <= max) return [l];
+
+    // corte = coluna onde a próxima parte começa. Precisa ser espaço na letra
+    // e nenhum acorde da primeira parte pode passar de [max].
+    bool cabe(int cut) {
+      for (final c in l.chords) {
+        if (c.idx < cut && c.idx + c.sym.length > max) return false;
+      }
+      return true;
+    }
+
+    var cut = -1;
+    final lyr = l.lyric.padRight(max + 1);
+    for (var i = max; i > max ~/ 3; i--) {
+      if (lyr[i] == ' ' && cabe(i)) {
+        cut = i;
+        break;
+      }
+    }
+    if (cut < 0) {
+      // palavra/acorde sem espaço nenhum: corte seco antes do 1º acorde que
+      // não cabe (ou em max)
+      cut = max;
+      for (final c in l.chords) {
+        if (c.idx < cut && c.idx + c.sym.length > max && c.idx > 0) cut = c.idx;
+      }
+    }
+
+    // pula os espaços do começo da continuação
+    var start = cut;
+    while (start < l.lyric.length && l.lyric[start] == ' ') {
+      start++;
+    }
+    // acorde parado em espaço entre o corte e o início vai p/ a continuação
+    final firstChords = l.chords.where((c) => c.idx < cut).toList();
+    final restChords = l.chords
+        .where((c) => c.idx >= cut)
+        .map((c) => Chord(c.sym, indent + (c.idx - start < 0 ? 0 : c.idx - start)))
+        .toList();
+    final first = SongLine(
+        l.lyric.substring(0, cut.clamp(0, l.lyric.length)).trimRight(), firstChords);
+    final restLyric = start < l.lyric.length ? l.lyric.substring(start) : '';
+    final rest = SongLine(' ' * indent + restLyric, restChords);
+    if (restLyric.trim().isEmpty && restChords.isEmpty) return [first];
+    // evita laço: se não andou nada, devolve como está
+    if (start <= 0) return [l];
+    return [first, ...wrapLine(rest, max)];
+  }
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, box) => _build(context, box.maxWidth));
+  }
+
+  Widget _build(BuildContext context, double maxWidth) {
     final lyricStyle = TextStyle(
       fontFamily: 'ChordMono',
       fontSize: fontSize,
@@ -39,6 +109,8 @@ class ChordChart extends StatelessWidget {
     );
     final charW = _measure('M', lyricStyle).width;
     final chordH = _measure('M', chordStyle).height;
+    final maxCols =
+        maxWidth.isFinite && charW > 0 ? (maxWidth / charW).floor() : 1 << 20;
 
     final blocks = <Widget>[];
     for (final sec in song.sections) {
@@ -67,7 +139,9 @@ class ChordChart extends StatelessWidget {
         ));
       }
       for (final line in sec.lines) {
-        blocks.add(_line(line, lyricStyle, chordStyle, charW, chordH));
+        for (final part in wrapLine(line, maxCols)) {
+          blocks.add(_line(part, lyricStyle, chordStyle, charW, chordH));
+        }
       }
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: blocks);

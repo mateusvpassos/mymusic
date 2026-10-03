@@ -141,6 +141,17 @@ class _SongEditPageState extends State<SongEditPage> {
     if (ok == true && ctrl.text.trim().isNotEmpty) {
       _song.sections = ChordEngine.importText(ctrl.text);
       _text.text = ChordEngine.serializeSections(_song.sections);
+      // "Tom: G", "Capo 2", {title: ...} no texto colado preenchem os campos
+      final meta = ChordEngine.detectMeta(ctrl.text);
+      final t = _title.text.trim();
+      if (meta.title != null && (t.isEmpty || t == 'Nova música')) {
+        _title.text = meta.title!;
+      }
+      if (meta.artist != null && _artist.text.trim().isEmpty) {
+        _artist.text = meta.artist!;
+      }
+      if (meta.key != null) _key.text = meta.key!;
+      if (meta.capo != null) _song.capo = meta.capo!;
       _maybeSuggestKey();
       _mode = 0;
       _recordChange();
