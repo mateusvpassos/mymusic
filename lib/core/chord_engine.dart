@@ -13,7 +13,9 @@ class SongMeta {
 class ChordEngine {
   static const sharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   static const flat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-  static const _flatKeys = {'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm'};
+  // Tons escritos com bemol. Gb fica de fora de propósito: é o mesmo tom de
+  // F#, e cifra de violão usa F# (transpor G -1 dava "Gb, B/Eb, Db/F").
+  static const _flatKeys = {'F', 'Bb', 'Eb', 'Ab', 'Db', 'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm'};
   // grafias raras que não estão nas duas escalas acima
   static const _enharm = {'Cb': 11, 'Fb': 4, 'E#': 5, 'B#': 0};
 

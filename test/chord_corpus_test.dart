@@ -168,6 +168,22 @@ void main() {
     test('parênteses com barra dentro', () => expect(t('B7(4/9)', 1), 'C7(4/9)'));
   });
 
+  group('grafia ao transpor a música', () {
+    Song musica(String key, String chords) =>
+        Song(id: 'x', title: 'x', key: key, sections: ChordEngine.importText('$chords' + String.fromCharCode(10) + 'Letra'));
+    List<String> syms(Song s) => s.sections.first.lines.first.chords.map((c) => c.sym).toList();
+    test('G -1 vira F# (não Gb)', () {
+      final t = ChordEngine.transposeSong(musica('G', 'G   C/E   D/F#'), -1);
+      expect(t.key, 'F#');
+      expect(syms(t), ['F#', 'B/D#', 'C#/F']);
+    });
+    test('C +3 continua Eb (tom com bemol)', () {
+      final t = ChordEngine.transposeSong(musica('C', 'C   F   G7'), 3);
+      expect(t.key, 'Eb');
+      expect(syms(t), ['Eb', 'Ab', 'Bb7']);
+    });
+  });
+
   group('sugestão de tom', () {
     test('ignora anotação antes do primeiro acorde', () {
       final secs = ChordEngine.importText('N.C.   Em   C\nLetra da música aqui');
