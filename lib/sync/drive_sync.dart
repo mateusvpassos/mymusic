@@ -30,10 +30,30 @@ class SyncState extends ChangeNotifier {
   }
 
   /// Sync automático após salvar (debounce). Não bloqueia UI.
+  ///
+  /// Faz o ciclo completo (baixa, mescla, sobe). Antes só subia: o que outro
+  /// aparelho/o editor web tinha salvo no Drive depois do último sync daqui
+  /// era sobrescrito e se perdia.
   void scheduleAuto(AppState app) {
     if (!autoSync || !signedIn) return;
     _autoTimer?.cancel();
-    _autoTimer = Timer(const Duration(seconds: 4), () => upload(app));
+    _autoTimer = Timer(const Duration(seconds: 4), () => _auto(app));
+  }
+
+  bool _pendente = false;
+
+  Future<void> _auto(AppState app) async {
+    // já tem sync rodando: roda de novo quando ele acabar, p/ não ter dois
+    // baixando/subindo ao mesmo tempo
+    if (busy) {
+      _pendente = true;
+      return;
+    }
+    await sync(app);
+    if (_pendente) {
+      _pendente = false;
+      await _auto(app);
+    }
   }
 
   Future<void> trySilent() async {

@@ -23,7 +23,7 @@ void main() {
     web.deleteSong('b');
     tablet.importJson(web.exportJson(), origem: 'drive');
     expect(tablet.songs.map((x) => x.id), ['a']);
-    expect(tablet.audit.first.details.join(' '), contains('Excluídos em outro aparelho: 1'));
+    expect(tablet.audit.first.details.join(' '), contains('Excluídas em outro aparelho: b'));
   });
 
   test('editada DEPOIS de excluída em outro lugar sobrevive', () {
@@ -43,5 +43,29 @@ void main() {
     final b = AppState()..setlists.add(Setlist(id: 'r', name: 'Missa', updatedAt: ontem));
     b.importJson(a.exportJson());
     expect(b.setlists, isEmpty);
+  });
+
+  test('sync sem novidade não grava nada no histórico', () {
+    final a = AppState()..songs.add(s('a', ontem));
+    final drive = a.exportJson();
+    var avisos = 0;
+    a.addListener(() => avisos++);
+    a.importJson(drive, origem: 'drive');
+    a.importJson(drive, origem: 'drive');
+    expect(a.audit, isEmpty);
+    expect(avisos, 0, reason: 'nem notifica (regravar dispararia outro sync)');
+  });
+
+  test('sync com novidade diz o quê, pelo nome', () {
+    final tablet = AppState()..songs.add(Song(id: 'a', title: 'Santo', updatedAt: ontem));
+    final web = AppState()
+      ..songs.addAll([
+        Song(id: 'a', title: 'Santo', capo: 2, updatedAt: DateTime.now()),
+        Song(id: 'n', title: 'Ave Maria', updatedAt: DateTime.now()),
+      ]);
+    tablet.importJson(web.exportJson(), origem: 'drive');
+    final d = tablet.audit.single.details.join(' | ');
+    expect(d, contains('Músicas novas: Ave Maria'));
+    expect(d, contains('Músicas alteradas: Santo'));
   });
 }

@@ -410,35 +410,41 @@ class AppState extends ChangeNotifier {
       final cur = deleted[k];
       if (cur == null || at.isAfter(cur)) deleted[k] = at;
     });
-    final antesS = songs.length, antesL = setlists.length;
+
+    // o que de fato mudou, por nome — vai p/ o histórico
+    final novas = <String>[], mudadas = <String>[], removidas = <String>[];
     for (final s in inSongs) {
       if (_buried('song', s.id, s.updatedAt)) continue; // excluída depois
       final i = songs.indexWhere((x) => x.id == s.id);
       if (i < 0) {
         songs.add(s);
+        novas.add(s.title);
       } else if (replace || s.updatedAt.isAfter(songs[i].updatedAt)) {
         songs[i] = s;
+        mudadas.add(s.title);
       }
     }
+    final novosL = <String>[], mudadosL = <String>[], removidosL = <String>[];
     for (final sl in inSets) {
       if (_buried('setlist', sl.id, sl.updatedAt)) continue;
       final i = setlists.indexWhere((x) => x.id == sl.id);
       if (i < 0) {
         setlists.add(sl);
+        novosL.add(sl.name);
       } else if (replace || sl.updatedAt.isAfter(setlists[i].updatedAt)) {
         setlists[i] = sl;
+        mudadosL.add(sl.name);
       }
     }
     // o que outro aparelho excluiu sai daqui também
-    var removidasS = 0, removidosL = 0;
     songs.removeWhere((x) {
       final r = _buried('song', x.id, x.updatedAt);
-      if (r) removidasS++;
+      if (r) removidas.add(x.title);
       return r;
     });
     setlists.removeWhere((x) {
       final r = _buried('setlist', x.id, x.updatedAt);
-      if (r) removidosL++;
+      if (r) removidosL.add(x.name);
       return r;
     });
     if (j['settings'] != null && replace) {
@@ -447,23 +453,40 @@ class AppState extends ChangeNotifier {
       settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>)
         ..deviceName = nome;
     }
+
+    final mudou = replace ||
+        novas.isNotEmpty ||
+        mudadas.isNotEmpty ||
+        removidas.isNotEmpty ||
+        novosL.isNotEmpty ||
+        mudadosL.isNotEmpty ||
+        removidosL.isNotEmpty;
+    // Sync sem novidade não grava, não notifica e não registra: com o sync
+    // automático cada salvamento gerava um "Sync com o Drive" vazio no
+    // histórico (e regravar dispararia outro sync).
+    if (!mudou) return inSongs.length;
+
+    String lista(List<String> xs) =>
+        xs.length <= 4 ? xs.join(', ') : '${xs.take(4).join(', ')} e mais ${xs.length - 4}';
     _resnap();
     final doDrive = origem == 'drive';
     _log(doDrive ? 'sincronizou' : 'importou', 'backup',
         doDrive
-            ? (replace ? 'Baixou do Drive (substituiu)' : 'Sync com o Drive')
+            ? (replace ? 'Baixou do Drive (substituiu)' : 'Recebeu do Drive')
             : (replace ? 'Importou backup (substituiu)' : 'Importou backup (mesclou)'),
         details: [
-          '${inSongs.length} música(s) recebida(s)',
-          '${inSets.length} repertório(s) recebido(s)',
-          if (removidasS + removidosL > 0)
-            'Excluídos em outro aparelho: $removidasS música(s), $removidosL repertório(s)',
-          'Total agora: ${songs.length} música(s), ${setlists.length} repertório(s)'
-              '${replace ? '' : ' (antes: $antesS e $antesL)'}',
+          if (novas.isNotEmpty) 'Músicas novas: ${lista(novas)}',
+          if (mudadas.isNotEmpty) 'Músicas alteradas: ${lista(mudadas)}',
+          if (removidas.isNotEmpty) 'Excluídas em outro aparelho: ${lista(removidas)}',
+          if (novosL.isNotEmpty) 'Repertórios novos: ${lista(novosL)}',
+          if (mudadosL.isNotEmpty) 'Repertórios alterados: ${lista(mudadosL)}',
+          if (removidosL.isNotEmpty) 'Repertórios excluídos em outro aparelho: ${lista(removidosL)}',
+          'Total agora: ${songs.length} música(s), ${setlists.length} repertório(s)',
         ]);
     touch();
     return inSongs.length;
   }
+
 
   Future<String> writeBackupFile() async {
     final dir = await getApplicationDocumentsDirectory();
