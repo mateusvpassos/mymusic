@@ -312,7 +312,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     for (final sec in song.sections) {
       for (final l in sec.lines) {
         for (final c in l.chords) {
-          if (seen.add(c.sym)) out.add(c.sym);
+          // (2x), |, N.C. são marcação, não acorde p/ mostrar diagrama
+          if (ChordEngine.isChordSymbol(c.sym) && seen.add(c.sym)) out.add(c.sym);
         }
       }
     }
