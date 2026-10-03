@@ -381,7 +381,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     _scrollPub?.cancel();
     _metro?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    WakelockPlus.disable();
+    // em sessão ao vivo a tela continua acesa fora da música também (quem
+    // segue espera na tela inicial o próximo canto)
+    if (!_live.active) WakelockPlus.disable();
     _ticker.dispose();
     _scroll.dispose();
     _focus.dispose();

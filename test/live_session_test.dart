@@ -139,6 +139,19 @@ void main() {
     expect(aHub.audit.any((e) => e.action == 'saiu' && e.title == 'Teclado'), isTrue);
   });
 
+  test('hub cai e volta: convidado reconecta sozinho', () async {
+    final porta = hub.serverPort;
+    await hub.leave(); // Wi-Fi caiu / app do hub fechou
+    await until(() => g1.reconnecting, what: 'g1 perceber a queda');
+    expect(g1.active, isTrue, reason: 'continua tentando, não sai da sessão');
+    // hub volta na mesma porta
+    expect(await hub.host(), isTrue);
+    expect(hub.serverPort, porta);
+    await until(() => !g1.reconnecting && hub.peers.containsKey(g1.myId),
+        what: 'g1 voltar sozinho');
+    expect(g1.hostName, 'Hub');
+  });
+
   test('beacon: só aceita o do MyMusic', () {
     final ok = LiveSession.parseBeacon(
         utf8.encode(jsonEncode({'app': 'mymusic', 'v': 1, 'name': 'Hub', 'port': 47800, 'peers': 2})),
