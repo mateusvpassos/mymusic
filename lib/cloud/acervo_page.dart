@@ -22,6 +22,14 @@ class _AcervoPageState extends State<AcervoPage> {
   String _q = '';
 
   @override
+  void initState() {
+    super.initState();
+    // se a leitura tinha sido negada antes, tenta de novo ao abrir
+    final a = context.read<AcervoState>();
+    if (a.erro != null || !a.carregou) a.religar();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final a = context.watch<AcervoState>();
     final st = context.watch<AppState>();
@@ -57,7 +65,12 @@ class _AcervoPageState extends State<AcervoPage> {
                 if (a.erro != null)
                   Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(a.erro!, style: TextStyle(color: scheme.error)),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(a.erro!, style: TextStyle(color: scheme.error))),
+                        TextButton(onPressed: a.religar, child: const Text('Tentar de novo')),
+                      ],
+                    ),
                   ),
                 Expanded(
                   child: hits.isEmpty

@@ -72,6 +72,8 @@ class AcervoState extends ChangeNotifier {
         if (!ch.doc.metadata.hasPendingWrites) _ultima[s.id] = s.copy();
       }
       carregou = true;
+      erro = null;
+      _tentativas = 0;
       notifyListeners();
     }, onError: _onErro));
     _subs.add(_db.collection('confianca').snapshots().listen((q) {
@@ -117,9 +119,28 @@ class AcervoState extends ChangeNotifier {
     }));
   }
 
+  int _tentativas = 0;
+  Timer? _religar;
+
+  // leitura negada (ex.: regras do servidor publicadas depois de abrir o
+  // app) derruba a escuta: religa algumas vezes sozinho
   void _onErro(Object e) {
-    erro = '$e';
+    final negado = e is FirebaseException && e.code == 'permission-denied';
+    erro = negado
+        ? 'O servidor negou acesso ao acervo (regras do Firestore desatualizadas?). Tentando de novo...'
+        : '$e';
     notifyListeners();
+    if (negado && _tentativas < 6 && !(_religar?.isActive ?? false)) {
+      _tentativas++;
+      _religar = Timer(Duration(seconds: 3 * _tentativas), religar);
+    }
+  }
+
+  /// Reabre as leituras do acervo (botão "tentar de novo" e ao abrir a tela).
+  void religar() {
+    if (eu.isEmpty) return;
+    _quem = '';
+    _userMudou();
   }
 
   Future<void> _semEsperar(Future<void> f) async {
