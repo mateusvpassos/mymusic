@@ -130,8 +130,24 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     _scroll.animateTo(alvo, duration: const Duration(milliseconds: 160), curve: Curves.linear);
   }
 
+  // navegação que chegou enquanto havia algo por cima (editor, diagrama):
+  // aplica quando a tela da música voltar a ser a de cima
+  LiveNav? _pendente;
+
+  void _aplicarPendente() {
+    final n = _pendente;
+    _pendente = null;
+    if (n != null && mounted && _live.following) _onRemoteNav(n);
+  }
+
   void _onRemoteNav(LiveNav n) {
     if (!mounted) return;
+    // pushReplacement troca a rota do TOPO: com o editor aberto por cima,
+    // descartaria a edição sem perguntar
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+      _pendente = n;
+      return;
+    }
     if (n.songId == _songId) {
       if (n.transpose != _transpose) setState(() => _transpose = n.transpose);
       return;
@@ -293,7 +309,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
         ],
       ),
-    );
+    ).then((_) => _aplicarPendente());
   }
 
   // versão forte/escura da cor do tema, p/ marcar bem em fundo branco (PDF/imagem)
@@ -481,7 +497,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Editar',
                     onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => SongEditPage(songId: base.id))),
+                            MaterialPageRoute(builder: (_) => SongEditPage(songId: base.id)))
+                        .then((_) => _aplicarPendente()),
                   ),
                 ],
               ),

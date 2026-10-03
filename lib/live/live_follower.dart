@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../data/store.dart';
+import '../ui/song_edit_page.dart';
 import '../ui/song_view_page.dart';
 import 'live_session.dart';
 
@@ -31,6 +32,12 @@ class _LiveFollowerState extends State<LiveFollower> {
   // Em sessão a tela não apaga: com a tela apagada o app pausa e quem segue
   // deixa de acompanhar. Fora da sessão, só a tela da música segura acesa.
   void _tela() {
+    final quem = _live.perdeuConducaoPara;
+    if (quem != null) {
+      _live.perdeuConducaoPara = null;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('$quem assumiu a condução — este aparelho agora segue')));
+    }
     final querAcesa = _live.active;
     if (querAcesa == _acesa) return;
     _acesa = querAcesa;
@@ -42,7 +49,9 @@ class _LiveFollowerState extends State<LiveFollower> {
   }
 
   void _onNav(LiveNav n) {
-    if (!mounted || SongViewPage.openCount > 0) return;
+    // tela de música aberta: ela mesma troca. Editor aberto: não atropela
+    // (a música certa abre quando a pessoa voltar p/ ela)
+    if (!mounted || SongViewPage.openCount > 0 || SongEditPage.openCount > 0) return;
     final st = context.read<AppState>();
     if (st.songById(n.songId) == null) return;
     final sl = n.setlistId == null ? null : st.setlistById(n.setlistId!);

@@ -402,8 +402,13 @@ class LiveSession extends ChangeNotifier {
     } else if (role == LiveRole.guest) {
       _send({'t': 'mode', 'id': myId, 'mode': m.name});
     }
+    // um condutor por vez: quem assume avisa, e quem conduzia passa a seguir
+    if (m == LiveMode.conduz && active) _send({'t': 'takeover', 'id': myId});
     notifyListeners();
   }
+
+  /// Nome de quem tirou a condução deste aparelho (a tela avisa e limpa).
+  String? perdeuConducaoPara;
 
   // ---- publicar (chamado pela tela da música de quem conduz) ----
 
@@ -561,6 +566,12 @@ class LiveSession extends ChangeNotifier {
         if (s.by == myId) return;
         lastScroll = s;
         if (following) _scrollCtrl.add(s);
+      case 'takeover':
+        final quem = m['id'] as String?;
+        if (quem != myId && mode == LiveMode.conduz) {
+          perdeuConducaoPara = _nameOf(quem);
+          setMode(LiveMode.segue);
+        }
       case 'song':
         _applySong(Song.fromJson(m['song'] as Map<String, dynamic>),
             _nameOf(m['by'] as String?), from);

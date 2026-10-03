@@ -139,6 +139,21 @@ void main() {
     expect(aHub.audit.any((e) => e.action == 'saiu' && e.title == 'Teclado'), isTrue);
   });
 
+  test('um condutor por vez: quem assume rebaixa o anterior', () async {
+    expect(hub.mode, LiveMode.conduz);
+    g1.setMode(LiveMode.conduz);
+    await until(() => hub.mode == LiveMode.segue, what: 'hub passar a seguir');
+    expect(hub.perdeuConducaoPara, 'Violão');
+    await until(() => g2.peers.values.where((p) => p.mode == LiveMode.conduz).length == 1,
+        what: 'lista de todos mostrar 1 condutor');
+    // e o g2 passa a receber a navegação do g1
+    final got = <LiveNav>[];
+    final sub = g2.navStream.listen(got.add);
+    g1.publishNav(song('t1', 'Aleluia'));
+    await until(() => got.isNotEmpty, what: 'nav do novo condutor');
+    await sub.cancel();
+  });
+
   test('hub cai e volta: convidado reconecta sozinho', () async {
     final porta = hub.serverPort;
     await hub.leave(); // Wi-Fi caiu / app do hub fechou

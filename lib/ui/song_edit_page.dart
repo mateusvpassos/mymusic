@@ -20,6 +20,9 @@ class SongEditPage extends StatefulWidget {
   const SongEditPage({super.key, required this.songId, this.novo});
   @override
   State<SongEditPage> createState() => _SongEditPageState();
+
+  /// Editor aberto: a sessão ao vivo não abre música por cima dele.
+  static int openCount = 0;
 }
 
 class _SongEditPageState extends State<SongEditPage> {
@@ -45,6 +48,7 @@ class _SongEditPageState extends State<SongEditPage> {
   @override
   void initState() {
     super.initState();
+    SongEditPage.openCount++;
     final src = widget.novo ?? context.read<AppState>().songById(widget.songId)!;
     _song = src.copy();
     ChordEngine.trimSectionEnds(_song.sections);
@@ -133,6 +137,7 @@ class _SongEditPageState extends State<SongEditPage> {
 
   @override
   void dispose() {
+    SongEditPage.openCount--;
     _title.dispose();
     _artist.dispose();
     _key.dispose();
