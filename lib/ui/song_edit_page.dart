@@ -14,7 +14,10 @@ class _ChordDrag {
 
 class SongEditPage extends StatefulWidget {
   final String songId;
-  const SongEditPage({super.key, required this.songId});
+  /// Música nova: só entra na biblioteca quando salvar (antes ficava uma
+  /// "Nova música" vazia pra trás se a pessoa desistisse).
+  final Song? novo;
+  const SongEditPage({super.key, required this.songId, this.novo});
   @override
   State<SongEditPage> createState() => _SongEditPageState();
 }
@@ -42,7 +45,7 @@ class _SongEditPageState extends State<SongEditPage> {
   @override
   void initState() {
     super.initState();
-    final src = context.read<AppState>().songById(widget.songId)!;
+    final src = widget.novo ?? context.read<AppState>().songById(widget.songId)!;
     _song = src.copy();
     ChordEngine.trimSectionEnds(_song.sections);
     _title = TextEditingController(text: _song.title);
@@ -52,7 +55,65 @@ class _SongEditPageState extends State<SongEditPage> {
     _notes = TextEditingController(text: _song.notes);
     _bpm = TextEditingController(text: _song.bpm > 0 ? '${_song.bpm}' : '');
     _current = ChordEngine.serializeSections(_song.sections);
+    _inicial = _assinatura();
   }
+
+  // ---- alteração não salva ----
+
+  late final String _inicial;
+
+  String _assinatura() {
+    final secs = _mode == 1 ? ChordEngine.importText(_text.text) : _song.sections;
+    return [
+      _title.text.trim(),
+      _artist.text.trim(),
+      _key.text.trim(),
+      _notes.text.trim(),
+      _bpm.text.trim(),
+      _song.tags.join(','),
+      '${_song.capo}',
+      ChordEngine.serializeSections(secs),
+    ].join('');
+  }
+
+  // voltar sem salvar perdia tudo calado; agora pergunta
+  Future<void> _tentarSair() async {
+    if (_assinatura() == _inicial) {
+      Navigator.pop(context);
+      return;
+    }
+    final r = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Sair sem salvar?'),
+        content: const Text('Você mudou esta música e ainda não salvou.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, 'descartar'),
+              child: const Text('Descartar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('Continuar editando')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, 'salvar'), child: const Text('Salvar')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (r == 'salvar') {
+      _save();
+    } else if (r == 'descartar') {
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _tentarSair();
+        },
+        child: _page(context),
+      );
 
   // registra mudança p/ undo (snapshot anterior já está em _current)
   void _recordChange() {
@@ -172,8 +233,7 @@ class _SongEditPageState extends State<SongEditPage> {
     _text.text = ChordEngine.serializeSections(_song.sections);
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _page(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(

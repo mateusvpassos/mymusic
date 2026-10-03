@@ -407,10 +407,9 @@ class _LibraryPageState extends State<LibraryPage>
 
   void _newSong(AppState st) {
     final s = Song(id: ChordEngine.uid(), title: 'Nova música');
-    st.upsertSong(s);
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)),
+      MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id, novo: s)),
     );
   }
 

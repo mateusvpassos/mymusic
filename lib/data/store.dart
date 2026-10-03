@@ -41,6 +41,7 @@ class AppState extends ChangeNotifier {
   void Function(Setlist sl)? onLocalSetlist;
 
   Future<void> load() async {
+    var reparadas = 0;
     final dir = await getApplicationDocumentsDirectory();
     _file = File('${dir.path}/mymusic_data.json');
     if (await _file!.exists()) {
@@ -54,6 +55,17 @@ class AppState extends ChangeNotifier {
         // no updatedAt (não é edição de verdade, não precisa ganhar no sync)
         for (final s in songs) {
           ChordEngine.trimSectionEnds(s.sections);
+          // acorde que versão antiga gravou como letra: aí é conserto de
+          // verdade, ganha updatedAt novo p/ chegar nos outros aparelhos
+          final n = ChordEngine.repairChordLines(s.sections);
+          if (n > 0) {
+            s.updatedAt = DateTime.now();
+            reparadas++;
+            _log('editou', 'musica', s.title, id: s.id, details: [
+              'Corrigido automaticamente: $n linha(s) de acorde estavam como letra '
+                  '(não apareciam como acorde nem mudavam de tom)',
+            ]);
+          }
         }
         setlists
           ..clear()
@@ -76,6 +88,7 @@ class AppState extends ChangeNotifier {
     _resnap();
     loaded = true;
     notifyListeners();
+    if (reparadas > 0) _scheduleSave();
   }
 
   Map<String, dynamic> _toJson() => {

@@ -193,6 +193,46 @@ class ChordEngine {
     return mudou;
   }
 
+  /// Conserta linha de acordes que foi gravada como LETRA por versão antiga
+  /// do parser (ex.: "D/F#   G7M" de antes de 7M ser reconhecido): ela fica
+  /// preta e não transpõe. Junta com a letra de baixo, como o import faria.
+  /// Mexe só nessas linhas; devolve quantas consertou.
+  static int repairChordLines(List<Section> sections) {
+    var n = 0;
+    // "Em", "A", "E" sozinhos podem ser palavra: só conta com 2+ tokens ou
+    // com cara inequívoca de acorde (número, baixo, sustenido/bemol)
+    bool claramenteAcorde(String l) {
+      final toks = _ws.allMatches(l).map((m) => m.group(0)!).toList();
+      return toks.length >= 2 || toks.any((t) => t.contains(RegExp(r'[0-9/#b(]')));
+    }
+
+    for (final sec in sections) {
+      final out = <SongLine>[];
+      for (var i = 0; i < sec.lines.length; i++) {
+        final l = sec.lines[i];
+        if (l.chords.isEmpty &&
+            l.lyric.trim().isNotEmpty &&
+            _isChordLine(l.lyric) &&
+            claramenteAcorde(l.lyric)) {
+          final next = i + 1 < sec.lines.length ? sec.lines[i + 1] : null;
+          final juntaCom = next != null &&
+              next.chords.isEmpty &&
+              next.lyric.trim().isNotEmpty &&
+              !_isChordLine(next.lyric);
+          out.add(_mergeChordLyric(l.lyric, juntaCom ? next.lyric : ''));
+          if (juntaCom) i++;
+          n++;
+          continue;
+        }
+        out.add(l);
+      }
+      sec.lines
+        ..clear()
+        ..addAll(out);
+    }
+    return n;
+  }
+
   static String serializeSections(List<Section> sections) {
     return sections.map((s) {
       final head = s.name.isNotEmpty ? '#${s.name}\n' : '';
