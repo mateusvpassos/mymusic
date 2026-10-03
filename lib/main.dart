@@ -15,8 +15,9 @@ void main() {
   final live = LiveSession(state);
   state.onPersist = () => sync.scheduleAuto(state);
   runApp(MyApp(state: state, sync: sync, live: live));
-  state.load();
-  sync.trySilent().then((_) {
+  // sync só depois do arquivo local carregado: antes os dois corriam juntos e,
+  // se a leitura terminasse por último, apagava o que o sync tinha mesclado
+  state.load().then((_) => sync.trySilent()).then((_) {
     if (sync.signedIn) sync.sync(state);
   });
 }

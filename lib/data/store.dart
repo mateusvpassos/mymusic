@@ -15,6 +15,12 @@ class AppState extends ChangeNotifier {
 
   /// Histórico do que mudou, mais recente primeiro.
   final List<AuditEvent> audit = [];
+
+  /// "Lápides": o que foi excluído e quando (`song:<id>` / `setlist:<id>`).
+  /// Viajam no sync do Drive p/ a exclusão chegar nos outros aparelhos — sem
+  /// isso o sync baixava a música apagada de volta e ela ressuscitava.
+  final Map<String, DateTime> deleted = {};
+  static const _tombstoneDays = 365;
   static const _auditMax = 400;
 
   // retratos da última gravação, p/ saber o que mudou de fato
@@ -55,6 +61,11 @@ class AppState extends ChangeNotifier {
           ..clear()
           ..addAll((j['audit'] as List? ?? [])
               .map((e) => AuditEvent.fromJson(e as Map<String, dynamic>)));
+        deleted
+          ..clear()
+          ..addAll(_readTombstones(j['deleted']));
+        final limite = DateTime.now().subtract(const Duration(days: _tombstoneDays));
+        deleted.removeWhere((_, at) => at.isBefore(limite));
       } catch (_) {/* arquivo corrompido: começa vazio */}
     }
     _resnap();
@@ -67,7 +78,25 @@ class AppState extends ChangeNotifier {
         'setlists': setlists.map((s) => s.toJson()).toList(),
         'settings': settings.toJson(),
         'audit': audit.map((e) => e.toJson()).toList(),
+        'deleted': deleted.map((k, v) => MapEntry(k, v.toIso8601String())),
       };
+
+  static Map<String, DateTime> _readTombstones(dynamic raw) {
+    final out = <String, DateTime>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final at = DateTime.tryParse('$v');
+        if (at != null) out['$k'] = at;
+      });
+    }
+    return out;
+  }
+
+  /// Excluído depois da última edição desta versão?
+  bool _buried(String kind, String id, DateTime updatedAt) {
+    final t = deleted['$kind:$id'];
+    return t != null && !updatedAt.isAfter(t);
+  }
 
   // ---- auditoria ----
 
@@ -184,6 +213,7 @@ class AppState extends ChangeNotifier {
     final s = songById(id);
     final usada = setlists.where((sl) => sl.songIds.contains(id)).toList();
     songs.removeWhere((x) => x.id == id);
+    deleted['song:$id'] = DateTime.now();
     for (final sl in setlists) {
       if (sl.songIds.remove(id)) _setSnaps[sl.id] = _snapOfSet(sl);
     }
@@ -247,6 +277,7 @@ class AppState extends ChangeNotifier {
   void deleteSetlist(String id) {
     final sl = setlists.where((s) => s.id == id).firstOrNull;
     setlists.removeWhere((s) => s.id == id);
+    deleted['setlist:$id'] = DateTime.now();
     _setSnaps.remove(id);
     _log('excluiu', 'repertorio', sl?.name ?? id, id: id, details: [
       if (sl != null) '${sl.songIds.length} música(s) na lista',
@@ -341,8 +372,16 @@ class AppState extends ChangeNotifier {
     if (replace) {
       songs.clear();
       setlists.clear();
+      deleted.clear();
     }
+    // junta as lápides (vale a exclusão mais recente)
+    _readTombstones(j['deleted']).forEach((k, at) {
+      final cur = deleted[k];
+      if (cur == null || at.isAfter(cur)) deleted[k] = at;
+    });
+    final antesS = songs.length, antesL = setlists.length;
     for (final s in inSongs) {
+      if (_buried('song', s.id, s.updatedAt)) continue; // excluída depois
       final i = songs.indexWhere((x) => x.id == s.id);
       if (i < 0) {
         songs.add(s);
@@ -351,6 +390,7 @@ class AppState extends ChangeNotifier {
       }
     }
     for (final sl in inSets) {
+      if (_buried('setlist', sl.id, sl.updatedAt)) continue;
       final i = setlists.indexWhere((x) => x.id == sl.id);
       if (i < 0) {
         setlists.add(sl);
@@ -358,6 +398,18 @@ class AppState extends ChangeNotifier {
         setlists[i] = sl;
       }
     }
+    // o que outro aparelho excluiu sai daqui também
+    var removidasS = 0, removidosL = 0;
+    songs.removeWhere((x) {
+      final r = _buried('song', x.id, x.updatedAt);
+      if (r) removidasS++;
+      return r;
+    });
+    setlists.removeWhere((x) {
+      final r = _buried('setlist', x.id, x.updatedAt);
+      if (r) removidosL++;
+      return r;
+    });
     if (j['settings'] != null && replace) {
       settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
     }
@@ -370,7 +422,10 @@ class AppState extends ChangeNotifier {
         details: [
           '${inSongs.length} música(s) recebida(s)',
           '${inSets.length} repertório(s) recebido(s)',
-          'Total agora: ${songs.length} música(s), ${setlists.length} repertório(s)',
+          if (removidasS + removidosL > 0)
+            'Excluídos em outro aparelho: $removidasS música(s), $removidosL repertório(s)',
+          'Total agora: ${songs.length} música(s), ${setlists.length} repertório(s)'
+              '${replace ? '' : ' (antes: $antesS e $antesL)'}',
         ]);
     touch();
     return inSongs.length;
