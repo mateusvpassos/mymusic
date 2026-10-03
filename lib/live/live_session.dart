@@ -108,9 +108,19 @@ class LiveSession extends ChangeNotifier {
   bool _wantConnected = false;
   Timer? _retry;
 
+  // O nome padrão vinha do id sorteado a cada abertura do app ("Aparelho
+  // Y51N" virava "I5PP" depois de reiniciar). Grava na 1ª vez.
+  void _fixaNome() {
+    if (app.settings.deviceName.trim().isEmpty) {
+      final nome = myName;
+      app.updateSettings((s) => s.deviceName = nome);
+    }
+  }
+
   /// Cria a sessão neste aparelho.
   Future<bool> host() async {
     await leave();
+    _fixaNome();
     error = null;
     for (var p = port; p < port + 10; p++) {
       try {
@@ -281,6 +291,7 @@ class LiveSession extends ChangeNotifier {
   /// Entra na sessão de [address] ("192.168.0.10" ou "192.168.0.10:47800").
   Future<bool> join(String address, {int? port}) async {
     await leave();
+    _fixaNome();
     error = null;
     var host = address.trim();
     var p = port ?? LiveSession.port;

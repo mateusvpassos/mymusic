@@ -167,6 +167,24 @@ void main() {
     expect(g1.hostName, 'Hub');
   });
 
+  test('nome padrão fica gravado (não muda a cada abertura)', () async {
+    final a = AppState();
+    final s1 = LiveSession(a);
+    await s1.host();
+    final nome = a.settings.deviceName;
+    expect(nome, startsWith('Aparelho '));
+    await s1.leave();
+    final s2 = LiveSession(a); // "reabriu o app"
+    expect(s2.myName, nome);
+  });
+
+  test('baixar backup de outro aparelho não troca o nome deste', () {
+    final a = AppState()..settings.deviceName = 'Violão';
+    final b = AppState()..settings.deviceName = 'Teclado';
+    a.importJson(b.exportJson(), replace: true);
+    expect(a.settings.deviceName, 'Violão');
+  });
+
   test('beacon: só aceita o do MyMusic', () {
     final ok = LiveSession.parseBeacon(
         utf8.encode(jsonEncode({'app': 'mymusic', 'v': 1, 'name': 'Hub', 'port': 47800, 'peers': 2})),

@@ -429,7 +429,10 @@ class AppState extends ChangeNotifier {
       return r;
     });
     if (j['settings'] != null && replace) {
-      settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>);
+      // nome na sessão ao vivo é deste aparelho: não vem junto do backup
+      final nome = settings.deviceName;
+      settings = AppSettings.fromJson(j['settings'] as Map<String, dynamic>)
+        ..deviceName = nome;
     }
     _resnap();
     final doDrive = origem == 'drive';
