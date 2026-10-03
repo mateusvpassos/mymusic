@@ -154,6 +154,10 @@ class AppSettings {
   bool dark;
   double fontScale; // 0.8 .. 2.0
   double scrollSpeed; // px/s no auto-scroll
+  // quanto um toque no pedal rola, em fração da altura da tela (0.1 .. 1.0)
+  double pageStep;
+  // nome deste aparelho na sessão ao vivo
+  String deviceName;
   // Mapeamento do pedal: ação -> lista de teclas (logicalKeyId)
   Map<String, List<int>> pedalKeys;
 
@@ -162,6 +166,8 @@ class AppSettings {
     this.dark = true,
     this.fontScale = 1.0,
     this.scrollSpeed = 28,
+    this.pageStep = 0.4,
+    this.deviceName = '',
     Map<String, List<int>>? pedalKeys,
   }) : pedalKeys = pedalKeys ?? {};
 
@@ -170,6 +176,8 @@ class AppSettings {
         'dark': dark,
         'fontScale': fontScale,
         'scrollSpeed': scrollSpeed,
+        'pageStep': pageStep,
+        if (deviceName.isNotEmpty) 'deviceName': deviceName,
         'pedalKeys': pedalKeys.map((k, v) => MapEntry(k, v)),
       };
 
@@ -178,6 +186,8 @@ class AppSettings {
         dark: (j['dark'] ?? true) as bool,
         fontScale: ((j['fontScale'] ?? 1.0) as num).toDouble(),
         scrollSpeed: ((j['scrollSpeed'] ?? 28) as num).toDouble(),
+        pageStep: ((j['pageStep'] ?? 0.4) as num).toDouble().clamp(0.1, 1.0),
+        deviceName: (j['deviceName'] ?? '') as String,
         pedalKeys: (j['pedalKeys'] as Map? ?? {}).map(
           (k, v) => MapEntry(k as String, (v as List).map((e) => e as int).toList()),
         ),

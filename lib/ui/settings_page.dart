@@ -63,10 +63,12 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 16),
             Text('Tamanho da letra: ${(s.fontScale * 100).round()}%'),
             Slider(
-              min: 0.8,
-              max: 2.0,
-              divisions: 12,
-              value: s.fontScale,
+              // mesma faixa do A-/A+ da tela da música: valor fora da faixa
+              // derruba o Slider
+              min: 0.7,
+              max: 2.8,
+              divisions: 21,
+              value: s.fontScale.clamp(0.7, 2.8),
               label: '${(s.fontScale * 100).round()}%',
               onChanged: (v) => st.updateSettings((x) => x.fontScale = v),
             ),
@@ -75,7 +77,7 @@ class SettingsPage extends StatelessWidget {
               min: 8,
               max: 80,
               divisions: 18,
-              value: s.scrollSpeed,
+              value: s.scrollSpeed.clamp(8, 80),
               label: s.scrollSpeed.round().toString(),
               onChanged: (v) => st.updateSettings((x) => x.scrollSpeed = v),
             ),
@@ -89,6 +91,21 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 4),
             _pedalRow(context, st, 'next', 'Avançar / rolar'),
             _pedalRow(context, st, 'prev', 'Voltar'),
+            const SizedBox(height: 12),
+            Text('Quanto cada toque rola: ${(s.pageStep * 100).round()}% da tela'),
+            Slider(
+              min: 0.1,
+              max: 1.0,
+              divisions: 18,
+              value: s.pageStep.clamp(0.1, 1.0),
+              label: '${(s.pageStep * 100).round()}%',
+              onChanged: (v) => st.updateSettings((x) => x.pageStep = v),
+            ),
+            Text(
+              'Menor = rola poucas linhas por toque. No fim da música o toque '
+              'seguinte passa p/ a próxima do repertório.',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+            ),
           ]),
           _card('Backup', [
             ListTile(

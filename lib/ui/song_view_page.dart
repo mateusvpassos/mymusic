@@ -154,14 +154,14 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
       if (_hasNav && _atBottom() && _idx < _list.length - 1) {
         _gotoSong(_idx + 1);
       } else {
-        _pageBy(0.8);
+        _pageBy(st.settings.pageStep);
       }
       return KeyEventResult.handled;
     } else if (action == 'prev') {
       if (_hasNav && _atTop() && _idx > 0) {
         _gotoSong(_idx - 1);
       } else {
-        _pageBy(-0.8);
+        _pageBy(-st.settings.pageStep);
       }
       return KeyEventResult.handled;
     }
