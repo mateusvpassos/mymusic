@@ -317,14 +317,21 @@ class CloudState extends ChangeNotifier {
 
   Future<void> criarGrupo(String nomeGrupo) async {
     final ref = _db.collection('grupos').doc();
-    await _semEsperar(
-      ref.set({
+    erro = null;
+    try {
+      // espera o servidor: antes as leituras do grupo saíam antes dele
+      // existir lá e voltavam "permission denied"
+      await ref.set({
         'nome': nomeGrupo,
         'dono': eu,
         'membros': [eu],
         'criadoEm': FieldValue.serverTimestamp(),
-      }),
-    );
+      });
+    } catch (e) {
+      erro = 'Não deu para criar o grupo (precisa de internet): $e';
+      notifyListeners();
+      return;
+    }
     _abrirGrupo(Grupo(ref.id, nomeGrupo, eu, [eu]));
     notifyListeners();
   }
@@ -463,7 +470,27 @@ class CloudState extends ChangeNotifier {
     carregou = false;
   }
 
+  int _tentativas = 0;
+  Timer? _religar;
+
+  // leitura negada logo após criar/entrar no grupo (o servidor ainda não
+  // tinha visto) derruba a escuta: religa algumas vezes antes de desistir
   void _onErro(Object e) {
+    final g = grupo;
+    if (g != null &&
+        e is FirebaseException &&
+        e.code == 'permission-denied' &&
+        _tentativas < 5 &&
+        !(_religar?.isActive ?? false)) {
+      _tentativas++;
+      _religar = Timer(Duration(seconds: 2 * _tentativas), () {
+        if (grupo?.id != g.id) return;
+        _pararGrupo();
+        _abrirGrupo(g);
+        notifyListeners();
+      });
+      return;
+    }
     erro = '$e';
     notifyListeners();
   }
@@ -664,8 +691,10 @@ class CloudState extends ChangeNotifier {
       _ultimaDaNuvem[d.id] = s.copy();
       app.applyCloudSong(s, forcar: !podeEditarSong(s));
     }
+    _tentativas = 0;
     if (!carregou) {
       carregou = true;
+      erro = null;
       notifyListeners();
     }
   }
