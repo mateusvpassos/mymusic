@@ -16,12 +16,16 @@ class SongLine {
   List<Chord> chords;
   SongLine(this.lyric, this.chords);
 
-  Map<String, dynamic> toJson() =>
-      {'l': lyric, 'c': chords.map((c) => c.toJson()).toList()};
+  Map<String, dynamic> toJson() => {
+    'l': lyric,
+    'c': chords.map((c) => c.toJson()).toList(),
+  };
   factory SongLine.fromJson(Map<String, dynamic> j) => SongLine(
-        j['l'] as String,
-        (j['c'] as List).map((e) => Chord.fromJson(e as Map<String, dynamic>)).toList(),
-      );
+    j['l'] as String,
+    (j['c'] as List)
+        .map((e) => Chord.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
   SongLine copy() => SongLine(lyric, chords.map((c) => c.copy()).toList());
 }
 
@@ -30,12 +34,16 @@ class Section {
   List<SongLine> lines;
   Section(this.name, this.lines);
 
-  Map<String, dynamic> toJson() =>
-      {'n': name, 'l': lines.map((l) => l.toJson()).toList()};
+  Map<String, dynamic> toJson() => {
+    'n': name,
+    'l': lines.map((l) => l.toJson()).toList(),
+  };
   factory Section.fromJson(Map<String, dynamic> j) => Section(
-        j['n'] as String,
-        (j['l'] as List).map((e) => SongLine.fromJson(e as Map<String, dynamic>)).toList(),
-      );
+    j['n'] as String,
+    (j['l'] as List)
+        .map((e) => SongLine.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
   Section copy() => Section(name, lines.map((l) => l.copy()).toList());
 }
 
@@ -49,6 +57,11 @@ class Song {
   List<String> tags;
   String notes; // anotações pessoais (ex.: "entra suave", "repete 2x")
   int bpm; // 0 = sem BPM
+  // velocidade da auto-rolagem desta música (px/s); 0 = a das configurações
+  double scrollSpeed;
+  // tempos litúrgicos em que cabe (vazio = qualquer) e momentos da Missa
+  List<String> tempos;
+  List<String> momentos;
   DateTime updatedAt;
 
   Song({
@@ -61,51 +74,66 @@ class Song {
     List<String>? tags,
     this.notes = '',
     this.bpm = 0,
+    this.scrollSpeed = 0,
+    List<String>? tempos,
+    List<String>? momentos,
     DateTime? updatedAt,
-  })  : sections = sections ?? [],
-        tags = tags ?? [],
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : sections = sections ?? [],
+       tags = tags ?? [],
+       tempos = tempos ?? [],
+       momentos = momentos ?? [],
+       updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'artist': artist,
-        'key': key,
-        'capo': capo,
-        'sections': sections.map((s) => s.toJson()).toList(),
-        'tags': tags,
-        'notes': notes,
-        'bpm': bpm,
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'artist': artist,
+    'key': key,
+    'capo': capo,
+    'sections': sections.map((s) => s.toJson()).toList(),
+    'tags': tags,
+    'notes': notes,
+    'bpm': bpm,
+    if (scrollSpeed > 0) 'scrollSpeed': scrollSpeed,
+    if (tempos.isNotEmpty) 'tempos': tempos,
+    if (momentos.isNotEmpty) 'momentos': momentos,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory Song.fromJson(Map<String, dynamic> j) => Song(
-        id: j['id'] as String,
-        title: j['title'] as String,
-        artist: (j['artist'] ?? '') as String,
-        key: (j['key'] ?? 'C') as String,
-        capo: (j['capo'] ?? 0) as int,
-        sections: (j['sections'] as List? ?? [])
-            .map((e) => Section.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        tags: (j['tags'] as List? ?? []).map((e) => e as String).toList(),
-        notes: (j['notes'] ?? '') as String,
-        bpm: (j['bpm'] ?? 0) as int,
-        updatedAt: DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
-      );
+    id: j['id'] as String,
+    title: j['title'] as String,
+    artist: (j['artist'] ?? '') as String,
+    key: (j['key'] ?? 'C') as String,
+    capo: (j['capo'] ?? 0) as int,
+    sections: (j['sections'] as List? ?? [])
+        .map((e) => Section.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    tags: (j['tags'] as List? ?? []).map((e) => e as String).toList(),
+    notes: (j['notes'] ?? '') as String,
+    bpm: (j['bpm'] ?? 0) as int,
+    scrollSpeed: ((j['scrollSpeed'] ?? 0) as num).toDouble(),
+    tempos: (j['tempos'] as List? ?? []).map((e) => e as String).toList(),
+    momentos: (j['momentos'] as List? ?? []).map((e) => e as String).toList(),
+    updatedAt:
+        DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
+  );
 
   Song copy() => Song(
-        id: id,
-        title: title,
-        artist: artist,
-        key: key,
-        capo: capo,
-        sections: sections.map((s) => s.copy()).toList(),
-        tags: List.of(tags),
-        notes: notes,
-        bpm: bpm,
-        updatedAt: updatedAt,
-      );
+    id: id,
+    title: title,
+    artist: artist,
+    key: key,
+    capo: capo,
+    sections: sections.map((s) => s.copy()).toList(),
+    tags: List.of(tags),
+    notes: notes,
+    bpm: bpm,
+    scrollSpeed: scrollSpeed,
+    tempos: List.of(tempos),
+    momentos: List.of(momentos),
+    updatedAt: updatedAt,
+  );
 }
 
 class Setlist {
@@ -113,6 +141,7 @@ class Setlist {
   String name;
   List<String> songIds;
   Map<String, int> transpose; // songId -> semitons (tom salvo no repertório)
+  Map<String, String> moments; // songId -> momento da Missa ("Entrada"...)
   DateTime? date; // data do evento (opcional)
   DateTime updatedAt;
 
@@ -121,32 +150,40 @@ class Setlist {
     required this.name,
     List<String>? songIds,
     Map<String, int>? transpose,
+    Map<String, String>? moments,
     this.date,
     DateTime? updatedAt,
-  })  : songIds = songIds ?? [],
-        transpose = transpose ?? {},
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : songIds = songIds ?? [],
+       transpose = transpose ?? {},
+       moments = moments ?? {},
+       updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'songIds': songIds,
-        'transpose': transpose,
-        'date': date?.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'songIds': songIds,
+    'transpose': transpose,
+    if (moments.isNotEmpty) 'moments': moments,
+    'date': date?.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory Setlist.fromJson(Map<String, dynamic> j) => Setlist(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        songIds: (j['songIds'] as List? ?? []).map((e) => e as String).toList(),
-        transpose: (j['transpose'] as Map? ?? {})
-            .map((k, v) => MapEntry(k as String, (v as num).toInt())),
-        date: (j['date'] != null && (j['date'] as String).isNotEmpty)
-            ? DateTime.tryParse(j['date'] as String)
-            : null,
-        updatedAt: DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    songIds: (j['songIds'] as List? ?? []).map((e) => e as String).toList(),
+    transpose: (j['transpose'] as Map? ?? {}).map(
+      (k, v) => MapEntry(k as String, (v as num).toInt()),
+    ),
+    moments: (j['moments'] as Map? ?? {}).map(
+      (k, v) => MapEntry(k as String, v as String),
+    ),
+    date: (j['date'] != null && (j['date'] as String).isNotEmpty)
+        ? DateTime.tryParse(j['date'] as String)
+        : null,
+    updatedAt:
+        DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
+  );
 }
 
 class AppSettings {
@@ -158,6 +195,8 @@ class AppSettings {
   double pageStep;
   // nome deste aparelho na sessão ao vivo
   String deviceName;
+  // tela da música só com a letra, grande (p/ quem canta)
+  bool lyricsOnly;
   // Mapeamento do pedal: ação -> lista de teclas (logicalKeyId)
   Map<String, List<int>> pedalKeys;
 
@@ -168,28 +207,32 @@ class AppSettings {
     this.scrollSpeed = 28,
     this.pageStep = 0.4,
     this.deviceName = '',
+    this.lyricsOnly = false,
     Map<String, List<int>>? pedalKeys,
   }) : pedalKeys = pedalKeys ?? {};
 
   Map<String, dynamic> toJson() => {
-        'seedColor': seedColor,
-        'dark': dark,
-        'fontScale': fontScale,
-        'scrollSpeed': scrollSpeed,
-        'pageStep': pageStep,
-        if (deviceName.isNotEmpty) 'deviceName': deviceName,
-        'pedalKeys': pedalKeys.map((k, v) => MapEntry(k, v)),
-      };
+    'seedColor': seedColor,
+    'dark': dark,
+    'fontScale': fontScale,
+    'scrollSpeed': scrollSpeed,
+    'pageStep': pageStep,
+    if (deviceName.isNotEmpty) 'deviceName': deviceName,
+    if (lyricsOnly) 'lyricsOnly': true,
+    'pedalKeys': pedalKeys.map((k, v) => MapEntry(k, v)),
+  };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
-        seedColor: (j['seedColor'] ?? 0xFF3D5AFE) as int,
-        dark: (j['dark'] ?? true) as bool,
-        fontScale: ((j['fontScale'] ?? 1.0) as num).toDouble(),
-        scrollSpeed: ((j['scrollSpeed'] ?? 28) as num).toDouble(),
-        pageStep: ((j['pageStep'] ?? 0.4) as num).toDouble().clamp(0.1, 1.0),
-        deviceName: (j['deviceName'] ?? '') as String,
-        pedalKeys: (j['pedalKeys'] as Map? ?? {}).map(
-          (k, v) => MapEntry(k as String, (v as List).map((e) => e as int).toList()),
-        ),
-      );
+    seedColor: (j['seedColor'] ?? 0xFF3D5AFE) as int,
+    dark: (j['dark'] ?? true) as bool,
+    fontScale: ((j['fontScale'] ?? 1.0) as num).toDouble(),
+    scrollSpeed: ((j['scrollSpeed'] ?? 28) as num).toDouble(),
+    pageStep: ((j['pageStep'] ?? 0.4) as num).toDouble().clamp(0.1, 1.0),
+    deviceName: (j['deviceName'] ?? '') as String,
+    lyricsOnly: (j['lyricsOnly'] ?? false) as bool,
+    pedalKeys: (j['pedalKeys'] as Map? ?? {}).map(
+      (k, v) =>
+          MapEntry(k as String, (v as List).map((e) => e as int).toList()),
+    ),
+  );
 }

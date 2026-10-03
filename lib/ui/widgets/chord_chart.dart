@@ -8,6 +8,8 @@ class ChordChart extends StatelessWidget {
   final double fontSize;
   final Color chordColor;
   final void Function(String sym)? onTapChord;
+  // só a letra, em fonte comum e quebrando por palavra (p/ quem canta)
+  final bool lyricsOnly;
 
   const ChordChart({
     super.key,
@@ -15,6 +17,7 @@ class ChordChart extends StatelessWidget {
     this.fontSize = 18,
     required this.chordColor,
     this.onTapChord,
+    this.lyricsOnly = false,
   });
 
   static bool _isRefrao(String name) {
@@ -76,10 +79,14 @@ class ChordChart extends StatelessWidget {
     final firstChords = l.chords.where((c) => c.idx < cut).toList();
     final restChords = l.chords
         .where((c) => c.idx >= cut)
-        .map((c) => Chord(c.sym, indent + (c.idx - start < 0 ? 0 : c.idx - start)))
+        .map(
+          (c) => Chord(c.sym, indent + (c.idx - start < 0 ? 0 : c.idx - start)),
+        )
         .toList();
     final first = SongLine(
-        l.lyric.substring(0, cut.clamp(0, l.lyric.length)).trimRight(), firstChords);
+      l.lyric.substring(0, cut.clamp(0, l.lyric.length)).trimRight(),
+      firstChords,
+    );
     final restLyric = start < l.lyric.length ? l.lyric.substring(start) : '';
     final rest = SongLine(' ' * indent + restLyric, restChords);
     if (restLyric.trim().isEmpty && restChords.isEmpty) return [first];
@@ -88,9 +95,33 @@ class ChordChart extends StatelessWidget {
     return [first, ...wrapLine(rest, max)];
   }
 
+  /// Seções como ficam no modo só letra: sem as linhas que só têm acorde
+  /// (intro, solo) e sem as seções que ficaram vazias por isso.
+  static List<Section> letra(Song song) {
+    final out = <Section>[];
+    for (final sec in song.sections) {
+      final linhas = <SongLine>[];
+      for (final l in sec.lines) {
+        final t = l.lyric.trim();
+        if (t.isEmpty && l.chords.isNotEmpty) continue;
+        if (t.isEmpty && (linhas.isEmpty || linhas.last.lyric.isEmpty))
+          continue;
+        linhas.add(SongLine(t, const []));
+      }
+      while (linhas.isNotEmpty && linhas.last.lyric.isEmpty) {
+        linhas.removeLast();
+      }
+      if (linhas.isNotEmpty) out.add(Section(sec.name, linhas));
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, box) => _build(context, box.maxWidth));
+    if (lyricsOnly) return _buildLetra(context);
+    return LayoutBuilder(
+      builder: (context, box) => _build(context, box.maxWidth),
+    );
   }
 
   Widget _build(BuildContext context, double maxWidth) {
@@ -109,34 +140,37 @@ class ChordChart extends StatelessWidget {
     );
     final charW = _measure('M', lyricStyle).width;
     final chordH = _measure('M', chordStyle).height;
-    final maxCols =
-        maxWidth.isFinite && charW > 0 ? (maxWidth / charW).floor() : 1 << 20;
+    final maxCols = maxWidth.isFinite && charW > 0
+        ? (maxWidth / charW).floor()
+        : 1 << 20;
 
     final blocks = <Widget>[];
     for (final sec in song.sections) {
       if (sec.name.isNotEmpty) {
         final refrao = _isRefrao(sec.name);
-        blocks.add(Container(
-          margin: const EdgeInsets.only(top: 18, bottom: 4),
-          padding: refrao
-              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
-              : EdgeInsets.zero,
-          decoration: refrao
-              ? BoxDecoration(
-                  color: chordColor.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(6),
-                )
-              : null,
-          child: Text(
-            sec.name.toUpperCase(),
-            style: TextStyle(
-              fontSize: fontSize * 0.7,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-              color: chordColor.withValues(alpha: 0.95),
+        blocks.add(
+          Container(
+            margin: const EdgeInsets.only(top: 18, bottom: 4),
+            padding: refrao
+                ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
+                : EdgeInsets.zero,
+            decoration: refrao
+                ? BoxDecoration(
+                    color: chordColor.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(6),
+                  )
+                : null,
+            child: Text(
+              sec.name.toUpperCase(),
+              style: TextStyle(
+                fontSize: fontSize * 0.7,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: chordColor.withValues(alpha: 0.95),
+              ),
             ),
           ),
-        ));
+        );
       }
       // linhas em branco no fim da seção são sobra (a seção seguinte já tem
       // espaço próprio): não desenha — vale p/ música que veio de versão
@@ -153,17 +187,75 @@ class ChordChart extends StatelessWidget {
         }
       }
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: blocks);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: blocks,
+    );
+  }
+
+  Widget _buildLetra(BuildContext context) {
+    final cor = Theme.of(context).colorScheme.onSurface;
+    final blocks = <Widget>[];
+    for (final sec in letra(song)) {
+      final refrao = _isRefrao(sec.name);
+      if (sec.name.isNotEmpty) {
+        blocks.add(
+          Padding(
+            padding: EdgeInsets.only(top: fontSize * 0.9, bottom: 2),
+            child: Text(
+              sec.name.toUpperCase(),
+              style: TextStyle(
+                fontSize: fontSize * 0.55,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: chordColor,
+              ),
+            ),
+          ),
+        );
+      } else if (blocks.isNotEmpty) {
+        blocks.add(SizedBox(height: fontSize * 0.6));
+      }
+      for (final l in sec.lines) {
+        blocks.add(
+          Text(
+            l.lyric.isEmpty ? ' ' : l.lyric,
+            style: TextStyle(
+              fontSize: fontSize,
+              height: 1.3,
+              color: cor,
+              // refrão em negrito, como no PDF: todo mundo canta junto
+              fontWeight: refrao ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+        );
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: blocks,
+    );
   }
 
   Widget _chordWidget(String sym, TextStyle chord) {
-    final t = Text(sym, style: chord, maxLines: 1, softWrap: false,
-        textScaler: TextScaler.noScaling);
+    final t = Text(
+      sym,
+      style: chord,
+      maxLines: 1,
+      softWrap: false,
+      textScaler: TextScaler.noScaling,
+    );
     if (onTapChord == null) return t;
     return GestureDetector(onTap: () => onTapChord!(sym), child: t);
   }
 
-  Widget _line(SongLine line, TextStyle lyric, TextStyle chord, double charW, double chordH) {
+  Widget _line(
+    SongLine line,
+    TextStyle lyric,
+    TextStyle chord,
+    double charW,
+    double chordH,
+  ) {
     final hasChords = line.chords.isNotEmpty;
     final placed = _placeChords(line, chord, charW);
     final content = Column(
@@ -176,16 +268,18 @@ class ChordChart extends StatelessWidget {
             child: Stack(
               children: [
                 for (final p in placed)
-                  Positioned(
-                    left: p.x,
-                    child: _chordWidget(p.sym, chord),
-                  ),
+                  Positioned(left: p.x, child: _chordWidget(p.sym, chord)),
               ],
             ),
           ),
-        Text(line.lyric.isEmpty ? ' ' : line.lyric,
-            style: lyric, maxLines: 1, softWrap: false,
-            overflow: TextOverflow.clip, textScaler: TextScaler.noScaling),
+        Text(
+          line.lyric.isEmpty ? ' ' : line.lyric,
+          style: lyric,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.clip,
+          textScaler: TextScaler.noScaling,
+        ),
       ],
     );
     return ClipRect(child: content);

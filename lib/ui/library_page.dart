@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
+import '../core/liturgia.dart';
 import '../core/search.dart';
 import '../data/store.dart';
 import '../live/live_page.dart';
@@ -197,20 +198,28 @@ class _LibraryPageState extends State<LibraryPage>
   Widget _songsTab(AppState st) {
     final list = SongSearch.run(st.songs, _query);
     if (list.isEmpty) return _empty('Nenhuma música', Icons.library_music);
+    final uso = UsoMusicas.calcula(st.setlists);
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
       itemCount: list.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, i) =>
-          _songCard(st, list[i].song, trecho: list[i].snippet),
+      itemBuilder: (_, i) => _songCard(
+        st,
+        list[i].song,
+        trecho: list[i].snippet,
+        uso: uso[list[i].song.id],
+      ),
     );
   }
 
-  Widget _songCard(AppState st, Song s, {String? trecho}) {
+  Widget _songCard(AppState st, Song s, {String? trecho, SongUse? uso}) {
     final scheme = Theme.of(context).colorScheme;
     final meta = <String>[
       if (s.artist.isNotEmpty) s.artist,
       if (s.bpm > 0) '${s.bpm} BPM',
+      // pelos repertórios com data já passada
+      if (uso != null)
+        'tocada ${UsoMusicas.quando(uso.ultima)} (${uso.vezes}x)',
     ].join('  •  ');
     return Card(
       child: ListTile(
@@ -409,36 +418,74 @@ class _LibraryPageState extends State<LibraryPage>
     final s = Song(id: ChordEngine.uid(), title: 'Nova música');
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id, novo: s)),
+      MaterialPageRoute(
+        builder: (_) => SongEditPage(songId: s.id, novo: s),
+      ),
     );
   }
 
   void _newSetlist(AppState st) async {
     final ctrl = TextEditingController();
+    // já nasce com a data da próxima Missa de domingo: é o que dá o tempo
+    // litúrgico das sugestões e o histórico de "tocada há X semanas"
+    final hoje = DateTime.now();
+    var data = DateTime(
+      hoje.year,
+      hoje.month,
+      hoje.day,
+    ).add(Duration(days: (7 - hoje.weekday) % 7));
+    String fmt(DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
     final name = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Novo repertório'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Nome'),
-          onSubmitted: (v) => Navigator.pop(context, v),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDlg) => AlertDialog(
+          title: const Text('Novo repertório'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'Nome'),
+                onSubmitted: (v) => Navigator.pop(context, v),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event),
+                title: Text(fmt(data)),
+                subtitle: Text(Liturgia.temposDe(data).first),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: data,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (d != null) setDlg(() => data = d);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, ctrl.text),
+              child: const Text('Criar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text),
-            child: const Text('Criar'),
-          ),
-        ],
       ),
     );
     if (name != null && name.trim().isNotEmpty) {
-      st.upsertSetlist(Setlist(id: ChordEngine.uid(), name: name.trim()));
+      st.upsertSetlist(
+        Setlist(id: ChordEngine.uid(), name: name.trim(), date: data),
+      );
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/chord_engine.dart';
+import '../core/liturgia.dart';
 import '../data/store.dart';
 import '../models/song.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ class _ChordDrag {
 
 class SongEditPage extends StatefulWidget {
   final String songId;
+
   /// Música nova: só entra na biblioteca quando salvar (antes ficava uma
   /// "Nova música" vazia pra trás se a pessoa desistisse).
   final Song? novo;
@@ -39,23 +41,48 @@ class _SongEditPageState extends State<SongEditPage> {
   String _current = '';
 
   final List<String> _palette = [
-    'C', 'D', 'E', 'F', 'G', 'A', 'B',
-    'Cm', 'Dm', 'Em', 'Fm', 'Gm', 'Am', 'Bm',
-    'C7', 'D7', 'E7', 'G7', 'A7', 'B7',
-    'Cmaj7', 'Dm7', 'Em7', 'Gsus4', 'A/C#', 'D/F#',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'A',
+    'B',
+    'Cm',
+    'Dm',
+    'Em',
+    'Fm',
+    'Gm',
+    'Am',
+    'Bm',
+    'C7',
+    'D7',
+    'E7',
+    'G7',
+    'A7',
+    'B7',
+    'Cmaj7',
+    'Dm7',
+    'Em7',
+    'Gsus4',
+    'A/C#',
+    'D/F#',
   ];
 
   @override
   void initState() {
     super.initState();
     SongEditPage.openCount++;
-    final src = widget.novo ?? context.read<AppState>().songById(widget.songId)!;
+    final src =
+        widget.novo ?? context.read<AppState>().songById(widget.songId)!;
     _song = src.copy();
     ChordEngine.trimSectionEnds(_song.sections);
     _title = TextEditingController(text: _song.title);
     _artist = TextEditingController(text: _song.artist);
     _key = TextEditingController(text: _song.key);
-    _text = TextEditingController(text: ChordEngine.serializeSections(_song.sections));
+    _text = TextEditingController(
+      text: ChordEngine.serializeSections(_song.sections),
+    );
     _notes = TextEditingController(text: _song.notes);
     _bpm = TextEditingController(text: _song.bpm > 0 ? '${_song.bpm}' : '');
     _current = ChordEngine.serializeSections(_song.sections);
@@ -67,7 +94,9 @@ class _SongEditPageState extends State<SongEditPage> {
   late final String _inicial;
 
   String _assinatura() {
-    final secs = _mode == 1 ? ChordEngine.importText(_text.text) : _song.sections;
+    final secs = _mode == 1
+        ? ChordEngine.importText(_text.text)
+        : _song.sections;
     return [
       _title.text.trim(),
       _artist.text.trim(),
@@ -75,6 +104,8 @@ class _SongEditPageState extends State<SongEditPage> {
       _notes.text.trim(),
       _bpm.text.trim(),
       _song.tags.join(','),
+      _song.tempos.join(','),
+      _song.momentos.join(','),
       '${_song.capo}',
       ChordEngine.serializeSections(secs),
     ].join('');
@@ -93,12 +124,17 @@ class _SongEditPageState extends State<SongEditPage> {
         content: const Text('Você mudou esta música e ainda não salvou.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, 'descartar'),
-              child: const Text('Descartar')),
+            onPressed: () => Navigator.pop(context, 'descartar'),
+            child: const Text('Descartar'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('Continuar editando')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Continuar editando'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, 'salvar'), child: const Text('Salvar')),
+            onPressed: () => Navigator.pop(context, 'salvar'),
+            child: const Text('Salvar'),
+          ),
         ],
       ),
     );
@@ -112,12 +148,12 @@ class _SongEditPageState extends State<SongEditPage> {
 
   @override
   Widget build(BuildContext context) => PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _tentarSair();
-        },
-        child: _page(context),
-      );
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _tentarSair();
+    },
+    child: _page(context),
+  );
 
   // registra mudança p/ undo (snapshot anterior já está em _current)
   void _recordChange() {
@@ -149,7 +185,9 @@ class _SongEditPageState extends State<SongEditPage> {
 
   void _save() {
     if (_mode == 1) _applyText();
-    _song.title = _title.text.trim().isEmpty ? 'Sem título' : _title.text.trim();
+    _song.title = _title.text.trim().isEmpty
+        ? 'Sem título'
+        : _title.text.trim();
     _song.artist = _artist.text.trim();
     _song.key = _key.text.trim().isEmpty ? 'C' : _key.text.trim();
     _song.notes = _notes.text.trim();
@@ -195,13 +233,20 @@ class _SongEditPageState extends State<SongEditPage> {
             style: const TextStyle(fontFamily: 'ChordMono', fontSize: 13),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
-              hintText: 'Cole a cifra aqui (acordes acima da letra ou [G]letra)...',
+              hintText:
+                  'Cole a cifra aqui (acordes acima da letra ou [G]letra)...',
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Importar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Importar'),
+          ),
         ],
       ),
     );
@@ -227,11 +272,12 @@ class _SongEditPageState extends State<SongEditPage> {
 
   void _exportText() {
     final t = ChordEngine.serializeSections(
-        _mode == 1 ? ChordEngine.importText(_text.text) : _song.sections);
-    Clipboard.setData(ClipboardData(text: t));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cifra copiada (texto)')),
+      _mode == 1 ? ChordEngine.importText(_text.text) : _song.sections,
     );
+    Clipboard.setData(ClipboardData(text: t));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Cifra copiada (texto)')));
   }
 
   void _syncTextFromModel() {
@@ -273,8 +319,16 @@ class _SongEditPageState extends State<SongEditPage> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: SegmentedButton<int>(
               segments: const [
-                ButtonSegment(value: 0, label: Text('Acordes'), icon: Icon(Icons.touch_app)),
-                ButtonSegment(value: 1, label: Text('Texto'), icon: Icon(Icons.notes)),
+                ButtonSegment(
+                  value: 0,
+                  label: Text('Acordes'),
+                  icon: Icon(Icons.touch_app),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  label: Text('Texto'),
+                  icon: Icon(Icons.notes),
+                ),
               ],
               selected: {_mode},
               onSelectionChanged: (s) {
@@ -320,12 +374,20 @@ class _SongEditPageState extends State<SongEditPage> {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Ex.: adoração, ceia, natal'),
+          decoration: const InputDecoration(
+            hintText: 'Ex.: adoração, ceia, natal',
+          ),
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text), child: const Text('Add')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -344,7 +406,10 @@ class _SongEditPageState extends State<SongEditPage> {
           TextField(
             controller: _title,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            decoration: const InputDecoration(hintText: 'Título', isDense: true),
+            decoration: const InputDecoration(
+              hintText: 'Título',
+              isDense: true,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -352,7 +417,10 @@ class _SongEditPageState extends State<SongEditPage> {
               Expanded(
                 child: TextField(
                   controller: _artist,
-                  decoration: const InputDecoration(hintText: 'Artista', isDense: true),
+                  decoration: const InputDecoration(
+                    hintText: 'Artista',
+                    isDense: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -361,7 +429,10 @@ class _SongEditPageState extends State<SongEditPage> {
                 child: TextField(
                   controller: _key,
                   textAlign: TextAlign.center,
-                  decoration: const InputDecoration(labelText: 'Tom', isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Tom',
+                    isDense: true,
+                  ),
                 ),
               ),
             ],
@@ -406,7 +477,10 @@ class _SongEditPageState extends State<SongEditPage> {
                 child: TextField(
                   controller: _bpm,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'BPM', isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'BPM',
+                    isDense: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -417,6 +491,77 @@ class _SongEditPageState extends State<SongEditPage> {
               ),
             ],
           ),
+          _liturgia(scheme),
+        ],
+      ),
+    );
+  }
+
+  // tempo litúrgico / momento da Missa: usados p/ sugerir cantos ao montar o
+  // repertório. Recolhido p/ não roubar espaço do editor.
+  Widget _liturgia(ColorScheme scheme) {
+    final resumo = [..._song.tempos, ..._song.momentos].join(' · ');
+    Widget grupo(String titulo, List<String> opcoes, List<String> marcados) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titulo,
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 2),
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  for (final o in opcoes)
+                    FilterChip(
+                      label: Text(o),
+                      visualDensity: VisualDensity.compact,
+                      selected: marcados.contains(o),
+                      onSelected: (v) => setState(() {
+                        if (v) {
+                          marcados.add(o);
+                          // mantém na ordem da lista (calendário / Missa)
+                          marcados.sort(
+                            (a, b) =>
+                                opcoes.indexOf(a).compareTo(opcoes.indexOf(b)),
+                          );
+                        } else {
+                          marcados.remove(o);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        expandedAlignment: Alignment.centerLeft,
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        dense: true,
+        leading: const Icon(Icons.church_outlined, size: 20),
+        title: Text(
+          resumo.isEmpty ? 'Tempo litúrgico e momento da Missa' : resumo,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: resumo.isEmpty
+            ? const Text('p/ sugerir este canto ao montar o repertório')
+            : null,
+        children: [
+          grupo(
+            'Tempo litúrgico (nenhum = qualquer tempo)',
+            Liturgia.tempos,
+            _song.tempos,
+          ),
+          grupo('Momento da Missa', Liturgia.momentos, _song.momentos),
         ],
       ),
     );
@@ -440,7 +585,11 @@ class _SongEditPageState extends State<SongEditPage> {
               maxLines: null,
               expands: true,
               textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontFamily: 'ChordMono', fontSize: 15, height: 1.4),
+              style: const TextStyle(
+                fontFamily: 'ChordMono',
+                fontSize: 15,
+                height: 1.4,
+              ),
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 alignLabelWithHint: true,
@@ -461,7 +610,9 @@ class _SongEditPageState extends State<SongEditPage> {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
             buildDefaultDragHandles: false,
             onReorderItem: (a, b) {
-              setState(() => _song.sections.insert(b, _song.sections.removeAt(a)));
+              setState(
+                () => _song.sections.insert(b, _song.sections.removeAt(a)),
+              );
               _recordChange();
             },
             footer: Padding(
@@ -575,7 +726,10 @@ class _SongEditPageState extends State<SongEditPage> {
             const SizedBox(width: 8),
             const Padding(
               padding: EdgeInsets.only(right: 6),
-              child: Text('Acordes', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                'Acordes',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
             Expanded(
               child: ListView.separated(
@@ -613,10 +767,14 @@ class _SongEditPageState extends State<SongEditPage> {
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text),
-              child: const Text('Usar')),
+            onPressed: () => Navigator.pop(context, ctrl.text),
+            child: const Text('Usar'),
+          ),
         ],
       ),
     );
@@ -657,7 +815,9 @@ class _SongEditPageState extends State<SongEditPage> {
   }
 
   void _addSection() {
-    setState(() => _song.sections.add(Section('Nova seção', [SongLine('', [])])));
+    setState(
+      () => _song.sections.add(Section('Nova seção', [SongLine('', [])])),
+    );
     _recordChange();
   }
 
@@ -670,11 +830,13 @@ class _SongEditPageState extends State<SongEditPage> {
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, '__del__'),
-              child: const Text('Excluir seção')),
+            onPressed: () => Navigator.pop(context, '__del__'),
+            child: const Text('Excluir seção'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text),
-              child: const Text('OK')),
+            onPressed: () => Navigator.pop(context, ctrl.text),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -699,7 +861,10 @@ class _PaletteChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chip = Chip(
-      label: Text(sym, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+      label: Text(
+        sym,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
       visualDensity: VisualDensity.compact,
     );
     return Draggable<_ChordDrag>(
@@ -710,13 +875,13 @@ class _PaletteChip extends StatelessWidget {
   }
 
   Widget _ghost(String s, Color c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: c,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(s, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(8)),
+    child: Text(
+      s,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+    ),
+  );
 }
 
 /// Uma linha editável: letra (monospace) + acordes posicionados/arrastáveis,
@@ -740,7 +905,11 @@ class _EditableLine extends StatefulWidget {
 class _EditableLineState extends State<_EditableLine> {
   final _lyricKey = GlobalKey();
 
-  static const _lyricStyle = TextStyle(fontFamily: 'ChordMono', fontSize: 16, height: 1.25);
+  static const _lyricStyle = TextStyle(
+    fontFamily: 'ChordMono',
+    fontSize: 16,
+    height: 1.25,
+  );
 
   double get _charW {
     final tp = TextPainter(
@@ -751,7 +920,11 @@ class _EditableLineState extends State<_EditableLine> {
   }
 
   // posições x sem overlap (empurra acorde largo p/ direita), por objeto Chord
-  Map<Chord, double> _placeX(SongLine line, TextStyle chordStyle, double charW) {
+  Map<Chord, double> _placeX(
+    SongLine line,
+    TextStyle chordStyle,
+    double charW,
+  ) {
     final sorted = [...line.chords]..sort((a, b) => a.idx.compareTo(b.idx));
     const gap = 8.0;
     final map = <Chord, double>{};
@@ -801,7 +974,10 @@ class _EditableLineState extends State<_EditableLine> {
                   color: Colors.transparent,
                   child: Text(c.sym, style: chordStyle.copyWith(fontSize: 17)),
                 ),
-                childWhenDragging: Opacity(opacity: 0.3, child: Text(c.sym, style: chordStyle)),
+                childWhenDragging: Opacity(
+                  opacity: 0.3,
+                  child: Text(c.sym, style: chordStyle),
+                ),
                 child: GestureDetector(
                   onTap: () => widget.onEditChord(c),
                   child: Text(c.sym, style: chordStyle),

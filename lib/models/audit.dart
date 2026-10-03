@@ -1,7 +1,8 @@
 /// Registro do que aconteceu no app — o que mudou, quando, em quê.
 class AuditEvent {
   final DateTime at;
-  final String action; // criou, editou, excluiu, duplicou, importou, sincronizou
+  final String
+  action; // criou, editou, excluiu, duplicou, importou, sincronizou
   final String entity; // musica, repertorio, config, backup
   final String entityId;
   final String title;
@@ -17,23 +18,22 @@ class AuditEvent {
   });
 
   Map<String, dynamic> toJson() => {
-        'at': at.toIso8601String(),
-        'a': action,
-        'e': entity,
-        'id': entityId,
-        't': title,
-        if (details.isNotEmpty) 'd': details,
-      };
+    'at': at.toIso8601String(),
+    'a': action,
+    'e': entity,
+    'id': entityId,
+    't': title,
+    if (details.isNotEmpty) 'd': details,
+  };
 
   static AuditEvent fromJson(Map<String, dynamic> j) => AuditEvent(
-        at: DateTime.tryParse(j['at'] as String? ?? '') ?? DateTime.now(),
-        action: j['a'] as String? ?? '?',
-        entity: j['e'] as String? ?? '?',
-        entityId: j['id'] as String? ?? '',
-        title: j['t'] as String? ?? '',
-        details:
-            (j['d'] as List? ?? const []).map((e) => e.toString()).toList(),
-      );
+    at: DateTime.tryParse(j['at'] as String? ?? '') ?? DateTime.now(),
+    action: j['a'] as String? ?? '?',
+    entity: j['e'] as String? ?? '?',
+    entityId: j['id'] as String? ?? '',
+    title: j['t'] as String? ?? '',
+    details: (j['d'] as List? ?? const []).map((e) => e.toString()).toList(),
+  );
 }
 
 /// Retrato leve de uma música, só p/ saber o que mudou entre duas gravações.
@@ -45,6 +45,7 @@ class SongSnap {
   final String title, artist, key, notes;
   final int capo, bpm;
   final String tags;
+  final String tempos, momentos;
   final int lines;
   final int contentHash;
 
@@ -56,6 +57,8 @@ class SongSnap {
     required this.capo,
     required this.bpm,
     required this.tags,
+    this.tempos = '',
+    this.momentos = '',
     required this.lines,
     required this.contentHash,
   });
@@ -68,16 +71,32 @@ class SongSnap {
     }
 
     cmp('Título', title, o.title);
-    cmp('Artista', artist.isEmpty ? '—' : artist, o.artist.isEmpty ? '—' : o.artist);
+    cmp(
+      'Artista',
+      artist.isEmpty ? '—' : artist,
+      o.artist.isEmpty ? '—' : o.artist,
+    );
     cmp('Tom', key, o.key);
     cmp('Capo', capo, o.capo);
     cmp('BPM', bpm, o.bpm);
     cmp('Tags', tags.isEmpty ? '—' : tags, o.tags.isEmpty ? '—' : o.tags);
+    cmp(
+      'Tempos',
+      tempos.isEmpty ? '—' : tempos,
+      o.tempos.isEmpty ? '—' : o.tempos,
+    );
+    cmp(
+      'Momentos',
+      momentos.isEmpty ? '—' : momentos,
+      o.momentos.isEmpty ? '—' : o.momentos,
+    );
     if (notes != o.notes) d.add('Observações alteradas');
     if (contentHash != o.contentHash) {
-      d.add(lines == o.lines
-          ? 'Cifra alterada'
-          : 'Cifra alterada ($lines → ${o.lines} linhas)');
+      d.add(
+        lines == o.lines
+            ? 'Cifra alterada'
+            : 'Cifra alterada ($lines → ${o.lines} linhas)',
+      );
     }
     return d;
   }
@@ -88,19 +107,24 @@ class SetlistSnap {
   final String name;
   final List<String> songIds;
   final Map<String, int> transpose;
+  final Map<String, String> moments;
   final String date;
 
   const SetlistSnap({
     required this.name,
     required this.songIds,
     required this.transpose,
+    this.moments = const {},
     required this.date,
   });
 
   List<String> diff(SetlistSnap o, String Function(String id) titleOf) {
     final d = <String>[];
     if (name != o.name) d.add('Nome: $name → ${o.name}');
-    if (date != o.date) d.add('Data: ${date.isEmpty ? '—' : date} → ${o.date.isEmpty ? '—' : o.date}');
+    if (date != o.date)
+      d.add(
+        'Data: ${date.isEmpty ? '—' : date} → ${o.date.isEmpty ? '—' : o.date}',
+      );
 
     final antes = songIds.toSet(), depois = o.songIds.toSet();
     for (final id in depois.difference(antes)) {
@@ -120,6 +144,8 @@ class SetlistSnap {
       if (a != b) {
         d.add('Tom de "${titleOf(id)}": ${_semi(a)} → ${_semi(b)}');
       }
+      final ma = moments[id] ?? '—', mb = o.moments[id] ?? '—';
+      if (ma != mb) d.add('Momento de "${titleOf(id)}": $ma → $mb');
     }
     return d;
   }

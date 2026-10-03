@@ -167,10 +167,10 @@ class _SongViewPageState extends State<SongViewPage>
       _pendente = n;
       return;
     }
-    if (n.songId == _songId) {
-      if (n.transpose != _transpose) setState(() => _transpose = n.transpose);
-      return;
-    }
+    // mesma música: o tom de quem conduz só vale ao abrir/trocar de música.
+    // Mudou o tom no meio, cada um fica com o seu (quem toca com capo, quem
+    // canta mais baixo...)
+    if (n.songId == _songId) return;
     // quem conduz foi p/ outro repertório (ou p/ a biblioteca): reabre no
     // contexto certo, p/ o "próxima música" daqui bater com o de lá
     if (n.setlistId != widget.setlistId) {
@@ -209,7 +209,9 @@ class _SongViewPageState extends State<SongViewPage>
   }
 
   void _saveTranspose() {
-    if (widget.setlistId == null) return;
+    // seguindo a sessão o tom daqui é só deste aparelho: gravar no
+    // repertório espalharia p/ os outros (a edição do repertório é enviada)
+    if (widget.setlistId == null || _live.following) return;
     final st = context.read<AppState>();
     final i = st.setlists.indexWhere((s) => s.id == widget.setlistId);
     if (i < 0) return;
@@ -232,8 +234,7 @@ class _SongViewPageState extends State<SongViewPage>
     final dt = (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
     if (!_autoScroll || !_scroll.hasClients) return;
-    final st = context.read<AppState>();
-    final next = _scroll.offset + st.settings.scrollSpeed * dt;
+    final next = _scroll.offset + _speed() * dt;
     if (next >= _scroll.position.maxScrollExtent) {
       _scroll.jumpTo(_scroll.position.maxScrollExtent);
       setState(() => _autoScroll = false);
@@ -241,6 +242,19 @@ class _SongViewPageState extends State<SongViewPage>
     } else {
       _scroll.jumpTo(next);
     }
+  }
+
+  /// px/s da auto-rolagem: o da música, ou o das configurações.
+  double _speed() {
+    final st = context.read<AppState>();
+    final v = st.songById(_songId)?.scrollSpeed ?? 0;
+    return v > 0 ? v : st.settings.scrollSpeed;
+  }
+
+  void _setSpeed(Song base, double delta) {
+    final st = context.read<AppState>();
+    base.scrollSpeed = (_speed() + delta).clamp(4.0, 200.0);
+    st.upsertSong(base);
   }
 
   void _toggleAuto() {
@@ -399,6 +413,12 @@ class _SongViewPageState extends State<SongViewPage>
     );
   }
 
+  void _toggleLetra() {
+    context.read<AppState>().updateSettings(
+      (s) => s.lyricsOnly = !s.lyricsOnly,
+    );
+  }
+
   void _setFont(double delta) {
     final st = context.read<AppState>();
     st.updateSettings(
@@ -461,7 +481,12 @@ class _SongViewPageState extends State<SongViewPage>
     }
     final steps = _transpose - (_capo ? base.capo : 0);
     final shown = steps == 0 ? base : ChordEngine.transposeSong(base, steps);
-    final fontSize = 18.0 * st.settings.fontScale;
+    final letra = st.settings.lyricsOnly;
+    // só letra: maior, p/ ler de longe cantando
+    final fontSize = 18.0 * st.settings.fontScale * (letra ? 1.3 : 1.0);
+    final momento = widget.setlistId == null
+        ? null
+        : st.setlistById(widget.setlistId!)?.moments[_songId];
     final scheme = Theme.of(context).colorScheme;
     // modo claro: primary do M3 fica pastel — usa versão saturada/forte
     final chordColor = st.settings.dark ? scheme.primary : _strongColor();
@@ -487,6 +512,7 @@ class _SongViewPageState extends State<SongViewPage>
                       ),
                     ),
                     Text(
+                      '${momento != null ? '$momento  •  ' : ''}'
                       '${shown.key}'
                       '${base.capo > 0 ? '  •  capo ${base.capo}${_capo ? '' : ' (off)'}' : ''}'
                       '${_transpose != 0 ? '  •  ${_transpose > 0 ? '+' : ''}$_transpose' : ''}'
@@ -586,7 +612,7 @@ class _SongViewPageState extends State<SongViewPage>
               ),
         body: Column(
           children: [
-            if (!_full && uniqueChords.isNotEmpty)
+            if (!_full && !letra && uniqueChords.isNotEmpty)
               _chordBar(uniqueChords, scheme, chordColor),
             if (!_full && base.notes.isNotEmpty)
               Container(
@@ -619,6 +645,10 @@ class _SongViewPageState extends State<SongViewPage>
               ),
             Expanded(
               child: Stack(
+                // sem isso a rolagem encolhia p/ a largura do texto: a faixa
+                // da auto-rolagem e o deslizar p/ trocar de música só
+                // funcionavam em cima da letra
+                fit: StackFit.expand,
                 children: [
                   GestureDetector(
                     onHorizontalDragEnd: _swipe,
@@ -636,6 +666,11 @@ class _SongViewPageState extends State<SongViewPage>
                       child: RepaintBoundary(
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 260),
+                          // padrão centraliza; a cifra fica à esquerda
+                          layoutBuilder: (atual, anteriores) => Stack(
+                            alignment: Alignment.topLeft,
+                            children: [...anteriores, ?atual],
+                          ),
                           transitionBuilder: (child, anim) {
                             final incoming = child.key == ValueKey(_songId);
                             final begin = Offset(
@@ -660,6 +695,7 @@ class _SongViewPageState extends State<SongViewPage>
                               fontSize: fontSize,
                               chordColor: chordColor,
                               onTapChord: _showDiagram,
+                              lyricsOnly: letra,
                             ),
                           ),
                         ),
@@ -695,6 +731,13 @@ class _SongViewPageState extends State<SongViewPage>
                       child: SafeArea(
                         child: Row(
                           children: [
+                            IconButton.filledTonal(
+                              isSelected: letra,
+                              icon: const Icon(Icons.lyrics_outlined),
+                              tooltip: 'Só letra',
+                              onPressed: _toggleLetra,
+                            ),
+                            const SizedBox(width: 6),
                             IconButton.filledTonal(
                               icon: const Icon(Icons.text_decrease),
                               tooltip: 'Fonte -',
@@ -770,12 +813,51 @@ class _SongViewPageState extends State<SongViewPage>
                       : 'Acordes com capo (desligado)',
                   onPressed: () => setState(() => _capo = !_capo),
                 ),
+              IconButton(
+                isSelected: st.settings.lyricsOnly,
+                icon: Icon(
+                  st.settings.lyricsOnly ? Icons.lyrics : Icons.lyrics_outlined,
+                ),
+                tooltip: st.settings.lyricsOnly
+                    ? 'Mostrar acordes'
+                    : 'Só letra (p/ quem canta)',
+                onPressed: _toggleLetra,
+              ),
               IconButton.filledTonal(
                 isSelected: _autoScroll,
                 icon: Icon(_autoScroll ? Icons.pause : Icons.play_arrow),
                 tooltip: 'Auto-rolagem',
                 onPressed: _toggleAuto,
               ),
+              // velocidade fica gravada na música (cada canto tem a sua)
+              if (_autoScroll) ...[
+                _tb(
+                  Icons.fast_rewind,
+                  'Mais devagar',
+                  () => _setSpeed(base, -4),
+                ),
+                Tooltip(
+                  message: base.scrollSpeed > 0
+                      ? 'Velocidade desta música (toque p/ voltar à padrão)'
+                      : 'Velocidade padrão (das configurações)',
+                  child: InkWell(
+                    onTap: base.scrollSpeed > 0
+                        ? () {
+                            base.scrollSpeed = 0;
+                            st.upsertSong(base);
+                          }
+                        : null,
+                    child: _label(
+                      '${_speed().round()}${base.scrollSpeed > 0 ? '' : '*'}',
+                    ),
+                  ),
+                ),
+                _tb(
+                  Icons.fast_forward,
+                  'Mais rápido',
+                  () => _setSpeed(base, 4),
+                ),
+              ],
               if (base.bpm > 0)
                 IconButton(
                   isSelected: _metro != null,
