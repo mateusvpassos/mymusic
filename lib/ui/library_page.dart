@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
+import '../core/search.dart';
 import '../data/store.dart';
 import '../live/live_page.dart';
 import '../live/live_session.dart';
@@ -15,7 +16,11 @@ class _GradientButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _GradientButton({required this.icon, required this.label, required this.onTap});
+  const _GradientButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -53,9 +58,14 @@ class _GradientButton extends StatelessWidget {
                 children: [
                   Icon(icon, color: Colors.white, size: 22),
                   const SizedBox(width: 8),
-                  Text(label,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -74,15 +84,19 @@ class _LiveButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final icon = Icon(
       live.active ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-      color: live.active ? (live.reconnecting ? scheme.error : scheme.primary) : null,
+      color: live.active
+          ? (live.reconnecting ? scheme.error : scheme.primary)
+          : null,
     );
     return IconButton(
       tooltip: 'Ao vivo',
       icon: live.active
           ? Badge(label: Text('${live.peers.length}'), child: icon)
           : icon,
-      onPressed: () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const LivePage())),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LivePage()),
+      ),
     );
   }
 }
@@ -93,7 +107,8 @@ class LibraryPage extends StatefulWidget {
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
-class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStateMixin {
+class _LibraryPageState extends State<LibraryPage>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: 2, vsync: this);
   String _query = '';
 
@@ -125,7 +140,10 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
         ),
         bottom: TabBar(
           controller: _tab,
-          tabs: const [Tab(text: 'Músicas'), Tab(text: 'Repertórios')],
+          tabs: const [
+            Tab(text: 'Músicas'),
+            Tab(text: 'Repertórios'),
+          ],
         ),
         actions: [
           _LiveButton(),
@@ -133,7 +151,9 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
             icon: const Icon(Icons.tune),
             tooltip: 'Configurações',
             onPressed: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const SettingsPage())),
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
           ),
         ],
       ),
@@ -142,7 +162,7 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             child: TextField(
-              onChanged: (v) => setState(() => _query = v.toLowerCase()),
+              onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Buscar...',
                 prefixIcon: const Icon(Icons.search),
@@ -175,23 +195,18 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
   }
 
   Widget _songsTab(AppState st) {
-    final list = st.songs
-        .where((s) =>
-            _query.isEmpty ||
-            s.title.toLowerCase().contains(_query) ||
-            s.artist.toLowerCase().contains(_query) ||
-            s.tags.any((t) => t.toLowerCase().contains(_query)))
-        .toList();
+    final list = SongSearch.run(st.songs, _query);
     if (list.isEmpty) return _empty('Nenhuma música', Icons.library_music);
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
       itemCount: list.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _songCard(st, list[i]),
+      itemBuilder: (_, i) =>
+          _songCard(st, list[i].song, trecho: list[i].snippet),
     );
   }
 
-  Widget _songCard(AppState st, Song s) {
+  Widget _songCard(AppState st, Song s, {String? trecho}) {
     final scheme = Theme.of(context).colorScheme;
     final meta = <String>[
       if (s.artist.isNotEmpty) s.artist,
@@ -200,21 +215,36 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
     return Card(
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-        title: Text(s.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-        subtitle: (meta.isEmpty && s.tags.isEmpty)
+        title: Text(
+          s.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
+        subtitle: (meta.isEmpty && s.tags.isEmpty && trecho == null)
             ? null
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // achou pela letra: mostra o trecho
+                  if (trecho != null)
+                    Text(
+                      '“$trecho”',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                   if (meta.isNotEmpty)
-                    Text(meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: scheme.onSurfaceVariant)),
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
                   if (s.tags.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -223,16 +253,25 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
                         runSpacing: 2,
                         children: s.tags
                             .take(4)
-                            .map((t) => Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: scheme.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(8),
+                            .map(
+                              (t) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: scheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  t,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: scheme.onSurfaceVariant,
                                   ),
-                                  child: Text(t,
-                                      style: TextStyle(
-                                          fontSize: 11, color: scheme.onSurfaceVariant)),
-                                ))
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
@@ -250,19 +289,29 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
             borderRadius: BorderRadius.circular(13),
           ),
           alignment: Alignment.center,
-          child: Text(s.key,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+          child: Text(
+            s.key,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (v) {
             if (v == 'edit') {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)),
+              );
             } else if (v == 'dup') {
               st.duplicateSong(s);
             } else if (v == 'del') {
-              _confirmDelete('Excluir "${s.title}"?', () => st.deleteSong(s.id));
+              _confirmDelete(
+                'Excluir "${s.title}"?',
+                () => st.deleteSong(s.id),
+              );
             }
           },
           itemBuilder: (_) => const [
@@ -271,8 +320,10 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
             PopupMenuItem(value: 'del', child: Text('Excluir')),
           ],
         ),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => SongViewPage(songId: s.id))),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SongViewPage(songId: s.id)),
+        ),
       ),
     );
   }
@@ -281,14 +332,24 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   Widget _setlistsTab(AppState st) {
-    if (st.setlists.isEmpty) return _empty('Nenhum repertório', Icons.queue_music);
+    if (st.setlists.isEmpty) {
+      return _empty('Nenhum repertório', Icons.queue_music);
+    }
+    final q = SongSearch.fold(_query.trim());
     // com data primeiro (mais recente no topo), depois sem data
-    final list = [...st.setlists]..sort((a, b) {
-        if (a.date != null && b.date != null) return b.date!.compareTo(a.date!);
-        if (a.date != null) return -1;
-        if (b.date != null) return 1;
-        return b.updatedAt.compareTo(a.updatedAt);
-      });
+    final list =
+        [
+          ...st.setlists.where(
+            (x) => q.isEmpty || SongSearch.fold(x.name).contains(q),
+          ),
+        ]..sort((a, b) {
+          if (a.date != null && b.date != null) {
+            return b.date!.compareTo(a.date!);
+          }
+          if (a.date != null) return -1;
+          if (b.date != null) return 1;
+          return b.updatedAt.compareTo(a.updatedAt);
+        });
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
       itemCount: list.length,
@@ -299,16 +360,23 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
           child: ListTile(
             contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             leading: const Icon(Icons.queue_music),
-            title: Text(sl.name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-            subtitle: Text(sl.date != null
-                ? '${_fmtDate(sl.date!)}  •  ${sl.songIds.length} músicas'
-                : '${sl.songIds.length} músicas'),
+            title: Text(
+              sl.name,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+            ),
+            subtitle: Text(
+              sl.date != null
+                  ? '${_fmtDate(sl.date!)}  •  ${sl.songIds.length} músicas'
+                  : '${sl.songIds.length} músicas',
+            ),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'dup') st.duplicateSetlist(sl);
                 if (v == 'del') {
-                  _confirmDelete('Excluir "${sl.name}"?', () => st.deleteSetlist(sl.id));
+                  _confirmDelete(
+                    'Excluir "${sl.name}"?',
+                    () => st.deleteSetlist(sl.id),
+                  );
                 }
               },
               itemBuilder: (_) => const [
@@ -316,8 +384,10 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
                 PopupMenuItem(value: 'del', child: Text('Excluir')),
               ],
             ),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => SetlistPage(setlistId: sl.id))),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => SetlistPage(setlistId: sl.id)),
+            ),
           ),
         );
       },
@@ -325,21 +395,23 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
   }
 
   Widget _empty(String msg, IconData icon) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 64, color: Theme.of(context).disabledColor),
-            const SizedBox(height: 12),
-            Text(msg, style: TextStyle(color: Theme.of(context).disabledColor)),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 64, color: Theme.of(context).disabledColor),
+        const SizedBox(height: 12),
+        Text(msg, style: TextStyle(color: Theme.of(context).disabledColor)),
+      ],
+    ),
+  );
 
   void _newSong(AppState st) {
     final s = Song(id: ChordEngine.uid(), title: 'Nova música');
     st.upsertSong(s);
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)),
+    );
   }
 
   void _newSetlist(AppState st) async {
@@ -355,10 +427,14 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text),
-              child: const Text('Criar')),
+            onPressed: () => Navigator.pop(context, ctrl.text),
+            child: const Text('Criar'),
+          ),
         ],
       ),
     );
@@ -373,7 +449,10 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
       builder: (_) => AlertDialog(
         content: Text(msg),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () {
               Navigator.pop(context);

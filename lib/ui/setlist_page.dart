@@ -4,6 +4,7 @@ import '../core/chord_engine.dart';
 import '../core/docx_export.dart';
 import '../core/image_export.dart';
 import '../core/pdf_export.dart';
+import '../core/search.dart';
 import '../core/text_export.dart';
 import '../data/store.dart';
 import '../models/song.dart';
@@ -15,9 +16,9 @@ String _fmtDate(DateTime d) =>
 /// Cifras já no tom escolhido no repertório — é isso que tem que sair na
 /// exportação, não o tom original da música.
 List<Song> _noTomDoRepertorio(Setlist sl, List<Song> songs) => songs.map((s) {
-      final steps = sl.transpose[s.id] ?? 0;
-      return steps == 0 ? s : ChordEngine.transposeSong(s, steps);
-    }).toList();
+  final steps = sl.transpose[s.id] ?? 0;
+  return steps == 0 ? s : ChordEngine.transposeSong(s, steps);
+}).toList();
 
 Color _strong(int seed) {
   final hsl = HSLColor.fromColor(Color(seed));
@@ -34,9 +35,14 @@ class SetlistPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final st = context.watch<AppState>();
-    final sl = st.setlists.firstWhere((s) => s.id == setlistId,
-        orElse: () => Setlist(id: '', name: '—'));
-    final songs = sl.songIds.map((id) => st.songById(id)).whereType<Song>().toList();
+    final sl = st.setlists.firstWhere(
+      (s) => s.id == setlistId,
+      orElse: () => Setlist(id: '', name: '—'),
+    );
+    final songs = sl.songIds
+        .map((id) => st.songById(id))
+        .whereType<Song>()
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -46,8 +52,13 @@ class SetlistPage extends StatelessWidget {
           children: [
             Text(sl.name),
             if (sl.date != null)
-              Text(_fmtDate(sl.date!),
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+              Text(
+                _fmtDate(sl.date!),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
           ],
         ),
         actions: [
@@ -73,15 +84,15 @@ class SetlistPage extends StatelessWidget {
             onPressed: songs.isEmpty
                 ? null
                 : () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SongViewPage(
-                          songId: songs.first.id,
-                          setlistId: sl.id,
-                          setlistSongIds: List.of(sl.songIds),
-                        ),
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SongViewPage(
+                        songId: songs.first.id,
+                        setlistId: sl.id,
+                        setlistSongIds: List.of(sl.songIds),
                       ),
                     ),
+                  ),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
@@ -99,28 +110,42 @@ class SetlistPage extends StatelessWidget {
               } else if (v == 'txt') {
                 TextExport.shareSetlistLyrics(sl.name, songs);
               } else if (v == 'pdf') {
-                PdfExport.printSetlist(sl.name, cifras,
-                    colorArgb: cor.toARGB32());
+                PdfExport.printSetlist(
+                  sl.name,
+                  cifras,
+                  colorArgb: cor.toARGB32(),
+                );
               } else if (v == 'docx') {
                 DocxExport.shareSetlist(sl.name, cifras, chordColor: cor);
               }
-              st.logEvent('exportou', 'repertorio', sl.name,
-                  details: ['Formato: ${v.toUpperCase()}',
-                    '${songs.length} música(s)']);
+              st.logEvent(
+                'exportou',
+                'repertorio',
+                sl.name,
+                details: [
+                  'Formato: ${v.toUpperCase()}',
+                  '${songs.length} música(s)',
+                ],
+              );
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'pdf', child: Text('PDF (todas as cifras)')),
               PopupMenuItem(value: 'docx', child: Text('Word (.docx)')),
               PopupMenuItem(value: 'img', child: Text('Imagem da lista')),
-              PopupMenuItem(value: 'txt', child: Text('Letras (TXT) — cantores')),
+              PopupMenuItem(
+                value: 'txt',
+                child: Text('Letras (TXT) — cantores'),
+              ),
             ],
           ),
         ],
       ),
       body: songs.isEmpty
           ? Center(
-              child: Text('Vazio — adicione músicas',
-                  style: TextStyle(color: Theme.of(context).disabledColor)),
+              child: Text(
+                'Vazio — adicione músicas',
+                style: TextStyle(color: Theme.of(context).disabledColor),
+              ),
             )
           : ReorderableListView.builder(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
@@ -131,19 +156,29 @@ class SetlistPage extends StatelessWidget {
               onReorderItem: (a, b) {
                 final ids = songs.map((s) => s.id).toList();
                 ids.insert(b, ids.removeAt(a));
-                sl.songIds = [...ids, ...sl.songIds.where((x) => !ids.contains(x))];
+                sl.songIds = [
+                  ...ids,
+                  ...sl.songIds.where((x) => !ids.contains(x)),
+                ];
                 st.upsertSetlist(sl);
               },
               itemBuilder: (_, i) {
                 final s = songs[i];
                 return Card(
                   key: ValueKey(s.id),
-                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                  margin: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 4,
+                  ),
                   child: ListTile(
                     leading: CircleAvatar(child: Text('${i + 1}')),
-                    title: Text(s.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text('${s.key}${s.artist.isNotEmpty ? '  •  ${s.artist}' : ''}'),
+                    title: Text(
+                      s.title,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      '${s.key}${s.artist.isNotEmpty ? '  •  ${s.artist}' : ''}',
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -184,34 +219,56 @@ class SetlistPage extends StatelessWidget {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setSheet) {
-          return DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.7,
-            builder: (_, controller) => ListView(
-              controller: controller,
-              children: [
-                for (final s in st.songs)
-                  CheckboxListTile(
-                    value: sl.songIds.contains(s.id),
-                    title: Text(s.title),
-                    subtitle: Text(s.key),
-                    onChanged: (v) {
-                      if (v == true) {
-                        if (!sl.songIds.contains(s.id)) sl.songIds.add(s.id);
-                      } else {
-                        sl.songIds.remove(s.id);
-                      }
-                      st.upsertSetlist(sl);
-                      setSheet(() {});
-                    },
+      builder: (_) {
+        var busca = '';
+        return StatefulBuilder(
+          builder: (context, setSheet) {
+            final achadas = SongSearch.run(st.songs, busca);
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.8,
+              builder: (_, controller) => ListView(
+                controller: controller,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Buscar por nome ou trecho da letra...',
+                        prefixIcon: Icon(Icons.search),
+                        isDense: true,
+                      ),
+                      onChanged: (v) => setSheet(() => busca = v),
+                    ),
                   ),
-              ],
-            ),
-          );
-        },
-      ),
+                  for (final h in achadas)
+                    CheckboxListTile(
+                      value: sl.songIds.contains(h.song.id),
+                      title: Text(h.song.title),
+                      subtitle: Text(
+                        h.snippet != null
+                            ? '${h.song.key}  •  “${h.snippet}”'
+                            : h.song.key,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onChanged: (v) {
+                        final id = h.song.id;
+                        if (v == true) {
+                          if (!sl.songIds.contains(id)) sl.songIds.add(id);
+                        } else {
+                          sl.songIds.remove(id);
+                        }
+                        st.upsertSetlist(sl);
+                        setSheet(() {});
+                      },
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
