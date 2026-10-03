@@ -438,7 +438,9 @@ class ChordEngine {
           cur.lines.last.lyric.trim().isEmpty) {
         cur.lines.removeLast();
       }
-      sections.add(cur);
+      // seção sem nome e sem linha (sobra de metadado/linha em branco antes
+      // do primeiro cabeçalho) não vira seção vazia
+      if (cur.name.isNotEmpty || cur.lines.isNotEmpty) sections.add(cur);
     }
 
     void newSection(String name) {
