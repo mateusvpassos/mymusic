@@ -27,10 +27,10 @@ class LivePeer {
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'mode': mode.name};
   static LivePeer fromJson(Map<String, dynamic> j) => LivePeer(
-        j['id'] as String,
-        j['name'] as String? ?? '?',
-        LiveMode.values.asNameMap()[j['mode']] ?? LiveMode.livre,
-      );
+    j['id'] as String,
+    j['name'] as String? ?? '?',
+    LiveMode.values.asNameMap()[j['mode']] ?? LiveMode.livre,
+  );
 }
 
 /// Quem conduz abriu/trocou de música ou mudou o tom.
@@ -94,7 +94,9 @@ class LiveSession extends ChangeNotifier {
 
   String get myName {
     final n = app.settings.deviceName.trim();
-    return n.isNotEmpty ? n : 'Aparelho ${myId.substring(myId.length - 4).toUpperCase()}';
+    return n.isNotEmpty
+        ? n
+        : 'Aparelho ${myId.substring(myId.length - 4).toUpperCase()}';
   }
 
   // ---- hub ----
@@ -124,10 +126,16 @@ class LiveSession extends ChangeNotifier {
     error = null;
     for (var p = port; p < port + 10; p++) {
       try {
-        _server = await HttpServer.bind(InternetAddress.anyIPv4, p, shared: false);
+        _server = await HttpServer.bind(
+          InternetAddress.anyIPv4,
+          p,
+          shared: false,
+        );
         serverPort = p;
         break;
-      } catch (_) {/* porta ocupada: tenta a próxima */}
+      } catch (_) {
+        /* porta ocupada: tenta a próxima */
+      }
     }
     if (_server == null) {
       error = 'Não consegui abrir a porta da sessão';
@@ -185,23 +193,27 @@ class LiveSession extends ChangeNotifier {
 
   Future<void> _startBeacon() async {
     try {
-      await _multicastLock(true);
+      // só enviar broadcast não precisa do MulticastLock (ele mantém o Wi-Fi
+      // acordando p/ todo pacote de broadcast da rede: gasta bateria)
       _beaconSock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       _beaconSock!.broadcastEnabled = true;
       final alvos = <InternetAddress>{InternetAddress('255.255.255.255')};
       // broadcast da sub-rede também (alguns roteadores descartam o global)
       for (final ip in await localAddresses()) {
         final o = ip.split('.');
-        if (o.length == 4) alvos.add(InternetAddress('${o[0]}.${o[1]}.${o[2]}.255'));
+        if (o.length == 4)
+          alvos.add(InternetAddress('${o[0]}.${o[1]}.${o[2]}.255'));
       }
-      _beaconTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final b = utf8.encode(jsonEncode({
-          'app': 'mymusic',
-          'v': _proto,
-          'name': myName,
-          'port': serverPort,
-          'peers': peers.length,
-        }));
+      _beaconTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        final b = utf8.encode(
+          jsonEncode({
+            'app': 'mymusic',
+            'v': _proto,
+            'name': myName,
+            'port': serverPort,
+            'peers': peers.length,
+          }),
+        );
         for (final a in alvos) {
           try {
             _beaconSock?.send(b, a, beaconPort);
@@ -222,8 +234,11 @@ class LiveSession extends ChangeNotifier {
     if (_discSock != null) return;
     try {
       await _multicastLock(true);
-      _discSock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, beaconPort,
-          reuseAddress: true);
+      _discSock = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        beaconPort,
+        reuseAddress: true,
+      );
       _discSock!.listen((ev) {
         if (ev != RawSocketEvent.read) return;
         final d = _discSock?.receive();
@@ -235,7 +250,7 @@ class LiveSession extends ChangeNotifier {
       });
       // some quem parou de anunciar
       _discTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-        final limite = DateTime.now().subtract(const Duration(seconds: 5));
+        final limite = DateTime.now().subtract(const Duration(seconds: 7));
         final antes = found.length;
         found.removeWhere((_, h) => h.seen.isBefore(limite));
         if (found.length != antes) notifyListeners();
@@ -261,8 +276,13 @@ class LiveSession extends ChangeNotifier {
     try {
       final j = jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
       if (j['app'] != 'mymusic' || j['port'] is! int) return null;
-      return FoundHost(from, j['port'] as int, (j['name'] ?? '?') as String,
-          (j['peers'] ?? 1) as int, DateTime.now());
+      return FoundHost(
+        from,
+        j['port'] as int,
+        (j['name'] ?? '?') as String,
+        (j['peers'] ?? 1) as int,
+        DateTime.now(),
+      );
     } catch (_) {
       return null;
     }
@@ -284,7 +304,7 @@ class LiveSession extends ChangeNotifier {
       return [
         for (final i in ifs)
           for (final a in i.addresses)
-            if (!a.isLoopback && !a.address.startsWith('169.254')) a.address
+            if (!a.isLoopback && !a.address.startsWith('169.254')) a.address,
       ];
     } catch (_) {
       return const [];
@@ -327,8 +347,9 @@ class LiveSession extends ChangeNotifier {
 
   Future<bool> _connect() async {
     try {
-      final ws = await WebSocket.connect('ws://$hostAddress/live')
-          .timeout(const Duration(seconds: 5));
+      final ws = await WebSocket.connect(
+        'ws://$hostAddress/live',
+      ).timeout(const Duration(seconds: 5));
       ws.pingInterval = const Duration(seconds: 4);
       _ws = ws;
       reconnecting = false;
@@ -338,7 +359,13 @@ class LiveSession extends ChangeNotifier {
         onError: (_) => _lostHost(),
         cancelOnError: true,
       );
-      _send({'t': 'hello', 'v': _proto, 'id': myId, 'name': myName, 'mode': mode.name});
+      _send({
+        't': 'hello',
+        'v': _proto,
+        'id': myId,
+        'name': myName,
+        'mode': mode.name,
+      });
       error = null;
       notifyListeners();
       return true;
@@ -497,7 +524,11 @@ class LiveSession extends ChangeNotifier {
   }
 
   void _broadcastPeers() {
-    _send({'t': 'peers', 'host': myName, 'peers': peers.values.map((p) => p.toJson()).toList()});
+    _send({
+      't': 'peers',
+      'host': myName,
+      'peers': peers.values.map((p) => p.toJson()).toList(),
+    });
   }
 
   void _onRaw(dynamic data, WebSocket? from) {
@@ -518,8 +549,11 @@ class LiveSession extends ChangeNotifier {
     // ---- só o hub ----
     if (role == LiveRole.host && from != null) {
       if (t == 'hello') {
-        final p = LivePeer(m['id'] as String, (m['name'] ?? '?') as String,
-            LiveMode.values.asNameMap()[m['mode']] ?? LiveMode.segue);
+        final p = LivePeer(
+          m['id'] as String,
+          (m['name'] ?? '?') as String,
+          LiveMode.values.asNameMap()[m['mode']] ?? LiveMode.segue,
+        );
         _clients[from] = p.id;
         peers[p.id] = p;
         app.logEvent('entrou', 'sessao', p.name);
@@ -535,7 +569,8 @@ class LiveSession extends ChangeNotifier {
         return;
       }
       if (t == 'mode') {
-        peers[m['id']]?.mode = LiveMode.values.asNameMap()[m['mode']] ?? LiveMode.livre;
+        peers[m['id']]?.mode =
+            LiveMode.values.asNameMap()[m['mode']] ?? LiveMode.livre;
         _broadcastPeers();
         notifyListeners();
         return;
@@ -553,7 +588,8 @@ class LiveSession extends ChangeNotifier {
         hostName = m['host'] as String?;
         _setPeers(m['peers']);
         if (m['nav'] is Map) _handle(m['nav'] as Map<String, dynamic>, null);
-        if (m['scroll'] is Map) _handle(m['scroll'] as Map<String, dynamic>, null);
+        if (m['scroll'] is Map)
+          _handle(m['scroll'] as Map<String, dynamic>, null);
         notifyListeners();
       case 'peers':
         hostName = (m['host'] as String?) ?? hostName;
@@ -563,13 +599,25 @@ class LiveSession extends ChangeNotifier {
         lastNavRaw = m;
         final de = _nameOf(m['by'] as String?);
         if (m['song'] is Map) {
-          _applySong(Song.fromJson(m['song'] as Map<String, dynamic>), de, from);
+          _applySong(
+            Song.fromJson(m['song'] as Map<String, dynamic>),
+            de,
+            from,
+          );
         }
         if (m['setlist'] is Map) {
-          _applySetlist(Setlist.fromJson(m['setlist'] as Map<String, dynamic>), de, from);
+          _applySetlist(
+            Setlist.fromJson(m['setlist'] as Map<String, dynamic>),
+            de,
+            from,
+          );
         }
-        final nav = LiveNav(m['by'] as String, m['songId'] as String,
-            m['setlistId'] as String?, (m['transpose'] ?? 0) as int);
+        final nav = LiveNav(
+          m['by'] as String,
+          m['songId'] as String,
+          m['setlistId'] as String?,
+          (m['transpose'] ?? 0) as int,
+        );
         if (nav.by == myId) return;
         lastNav = nav;
         lastScroll = null;
@@ -577,8 +625,11 @@ class LiveSession extends ChangeNotifier {
         notifyListeners();
       case 'scroll':
         lastScrollRaw = m;
-        final s = LiveScroll(m['by'] as String, m['songId'] as String,
-            (m['frac'] as num).toDouble());
+        final s = LiveScroll(
+          m['by'] as String,
+          m['songId'] as String,
+          (m['frac'] as num).toDouble(),
+        );
         if (s.by == myId) return;
         lastScroll = s;
         if (following) _scrollCtrl.add(s);
@@ -589,11 +640,17 @@ class LiveSession extends ChangeNotifier {
           setMode(LiveMode.segue);
         }
       case 'song':
-        _applySong(Song.fromJson(m['song'] as Map<String, dynamic>),
-            _nameOf(m['by'] as String?), from);
+        _applySong(
+          Song.fromJson(m['song'] as Map<String, dynamic>),
+          _nameOf(m['by'] as String?),
+          from,
+        );
       case 'setlist':
-        _applySetlist(Setlist.fromJson(m['setlist'] as Map<String, dynamic>),
-            _nameOf(m['by'] as String?), from);
+        _applySetlist(
+          Setlist.fromJson(m['setlist'] as Map<String, dynamic>),
+          _nameOf(m['by'] as String?),
+          from,
+        );
     }
   }
 

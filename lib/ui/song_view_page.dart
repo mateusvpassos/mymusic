@@ -630,32 +630,37 @@ class _SongViewPageState extends State<SongViewPage>
                         16,
                         MediaQuery.of(context).size.height * 0.6,
                       ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        transitionBuilder: (child, anim) {
-                          final incoming = child.key == ValueKey(_songId);
-                          final begin = Offset(
-                            _dir * (incoming ? 1.0 : -1.0),
-                            0,
-                          );
-                          return SlideTransition(
-                            position: Tween(begin: begin, end: Offset.zero)
-                                .animate(
-                                  CurvedAnimation(
-                                    parent: anim,
-                                    curve: Curves.easeOutCubic,
+                      // a cifra vira uma camada só: rolar (inclusive a
+                      // auto-rolagem, a cada quadro) só desloca a camada em
+                      // vez de redesenhar todo o texto — menos CPU/bateria
+                      child: RepaintBoundary(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          transitionBuilder: (child, anim) {
+                            final incoming = child.key == ValueKey(_songId);
+                            final begin = Offset(
+                              _dir * (incoming ? 1.0 : -1.0),
+                              0,
+                            );
+                            return SlideTransition(
+                              position: Tween(begin: begin, end: Offset.zero)
+                                  .animate(
+                                    CurvedAnimation(
+                                      parent: anim,
+                                      curve: Curves.easeOutCubic,
+                                    ),
                                   ),
-                                ),
-                            child: child,
-                          );
-                        },
-                        child: KeyedSubtree(
-                          key: ValueKey(_songId),
-                          child: ChordChart(
-                            song: shown,
-                            fontSize: fontSize,
-                            chordColor: chordColor,
-                            onTapChord: _showDiagram,
+                              child: child,
+                            );
+                          },
+                          child: KeyedSubtree(
+                            key: ValueKey(_songId),
+                            child: ChordChart(
+                              song: shown,
+                              fontSize: fontSize,
+                              chordColor: chordColor,
+                              onTapChord: _showDiagram,
+                            ),
                           ),
                         ),
                       ),
