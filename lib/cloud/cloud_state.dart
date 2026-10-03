@@ -11,7 +11,7 @@ import '../data/store.dart';
 import '../models/song.dart';
 import 'cloud_config.dart';
 
-/// Grupo do ministério na nuvem.
+/// Grupo compartilhado na nuvem.
 class Grupo {
   final String id, nome, dono;
   final List<String> membros;

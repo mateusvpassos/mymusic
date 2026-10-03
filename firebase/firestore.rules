@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// MyMusic — biblioteca compartilhada do ministério.
+// MyMusic — biblioteca compartilhada por grupo (banda, coral, ministério...).
 //
 // grupos/{g}                       nome, dono (e-mail), membros [e-mails]
 // grupos/{g}/pessoas/{email}       nome de quem é do grupo

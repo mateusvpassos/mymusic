@@ -44,6 +44,15 @@ App nativo Android feito em **Flutter**, focado em ser **bonito, rápido e fáci
 - **Exportar / importar JSON** (backup completo)
 - **PDF** (1 ou 2 colunas, encaixa na página), **Word (.docx)**, **imagem** e **TXT só letras** — da música ou do repertório inteiro no tom do repertório
 
+### Grupo compartilhado (nuvem — Firebase)
+- Um grupo (banda, coral, ministério...) com a mesma biblioteca para todos, sincronizada na hora e offline
+- **Quem cria é o dono**; os outros **sugerem** (o editor vira "Sugerir mudança") e o dono aceita ou recusa vendo a diferença linha a linha
+- **Histórico de versões** de cada música (quem, quando, o que mudou) e **voltar a qualquer versão**
+- Dono **libera** pessoas por música/repertório ou para tudo dele; repertório dos outros fica só leitura
+- Regras de segurança no servidor: [`firebase/firestore.rules`](firebase/firestore.rules) (testes: `cd firebase && npm test`)
+- Configurar: [`docs/FIREBASE.md`](docs/FIREBASE.md). Sem configurar, o app segue só com o Drive
+- Teste local sem tocar no Google: `cd firebase && npm run emu` e `flutter run --dart-define=MYMUSIC_EMU=10.0.2.2`
+
 ### Aparência
 - Tema claro/escuro, **8 cores** à escolha, tamanho de fonte ajustável
 

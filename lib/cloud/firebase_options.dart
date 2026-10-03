@@ -1,6 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 
-/// Configuração do projeto Firebase do ministério (console do Firebase →
+/// Configuração do projeto Firebase (console do Firebase →
 /// Configurações do projeto → Seus apps → Android). Não é segredo: o acesso
 /// é controlado pelas regras em firebase/firestore.rules.
 ///

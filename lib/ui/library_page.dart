@@ -386,10 +386,18 @@ class _LibraryPageState extends State<LibraryPage>
               sl.name,
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
             ),
-            subtitle: Text(
-              sl.date != null
-                  ? '${_fmtDate(sl.date!)}  •  ${sl.songIds.length} músicas'
-                  : '${sl.songIds.length} músicas',
+            subtitle: Builder(
+              builder: (context) {
+                final c = context.watch<CloudState>();
+                return Text(
+                  [
+                    if (sl.date != null) _fmtDate(sl.date!),
+                    '${sl.songIds.length} músicas',
+                    if (c.ativa && sl.dono.isNotEmpty && sl.dono != c.eu)
+                      'de ${c.nomeDe(sl.dono)}',
+                  ].join('  •  '),
+                );
+              },
             ),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
@@ -401,9 +409,11 @@ class _LibraryPageState extends State<LibraryPage>
                   );
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'dup', child: Text('Duplicar')),
-                PopupMenuItem(value: 'del', child: Text('Excluir')),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'dup', child: Text('Duplicar')),
+                // no grupo só o dono apaga
+                if (context.read<CloudState>().souDono(sl.dono))
+                  const PopupMenuItem(value: 'del', child: Text('Excluir')),
               ],
             ),
             onTap: () => Navigator.push(
@@ -551,7 +561,7 @@ class _CloudButtons extends StatelessWidget {
             ),
           ),
         IconButton(
-          tooltip: c.ativa ? 'Grupo: ${c.grupo!.nome}' : 'Grupo do ministério',
+          tooltip: c.ativa ? 'Grupo: ${c.grupo!.nome}' : 'Grupo compartilhado',
           icon: Icon(c.ativa ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
           onPressed: () => Navigator.push(
             context,

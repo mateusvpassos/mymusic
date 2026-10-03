@@ -138,7 +138,7 @@ class SettingsPage extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const AuditPage())),
             ),
           ]),
-          _card('Grupo do ministério (nuvem)', [
+          _card('Grupo compartilhado (nuvem)', [
             Builder(builder: (context) {
               final c = context.watch<CloudState>();
               return ListTile(

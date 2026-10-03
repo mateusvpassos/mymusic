@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'cloud_config.dart';
 import 'cloud_state.dart';
 
-/// Grupo do ministério: entrar, convidar pessoas, quem pode editar o quê.
+/// Grupo compartilhado: entrar, convidar pessoas, quem pode editar o quê.
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
   @override
@@ -28,7 +28,7 @@ class _CloudPageState extends State<CloudPage> {
     final c = context.watch<CloudState>();
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Grupo do ministério')),
+      appBar: AppBar(title: const Text('Grupo compartilhado')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -113,7 +113,7 @@ class _CloudPageState extends State<CloudPage> {
       titulo: 'Entrar',
       children: [
         const Text(
-          'Com a conta Google, as músicas ficam no grupo do ministério: '
+          'Com a conta Google, as músicas ficam num grupo compartilhado: '
           'cada um vê tudo, quem criou é o dono e os outros mandam sugestões.',
         ),
         const SizedBox(height: 12),
@@ -171,7 +171,7 @@ class _CloudPageState extends State<CloudPage> {
         ] else
           Text(
             'Para entrar no grupo de alguém, peça para te convidar com o '
-            'e-mail ${c.eu}. Ou crie o grupo do seu ministério:',
+            'e-mail ${c.eu}. Ou crie o seu grupo (banda, coral, ministério...):',
           ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -184,12 +184,18 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   Future<void> _criarGrupo(BuildContext context, CloudState c) async {
-    final ctrl = TextEditingController(text: 'Ministério de Música');
+    final ctrl = TextEditingController();
     final nome = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Novo grupo'),
-        content: TextField(controller: ctrl, autofocus: true),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Nome do grupo (ex.: banda, coral, ministério)',
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

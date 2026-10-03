@@ -62,7 +62,7 @@ class Song {
   // tempos litúrgicos em que cabe (vazio = qualquer) e momentos da Missa
   List<String> tempos;
   List<String> momentos;
-  // nuvem (grupo do ministério): quem criou, quem mais pode editar, nº da
+  // nuvem (grupo compartilhado): quem criou, quem mais pode editar, nº da
   // versão e quem fez a última mudança. Vazio = só neste aparelho.
   String dono;
   String donoNome;
