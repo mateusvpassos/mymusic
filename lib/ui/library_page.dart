@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
 import '../data/store.dart';
+import '../live/live_page.dart';
+import '../live/live_session.dart';
 import '../models/song.dart';
 import 'song_view_page.dart';
 import 'song_edit_page.dart';
@@ -64,6 +66,27 @@ class _GradientButton extends StatelessWidget {
   }
 }
 
+/// Atalho p/ a sessão ao vivo; acende e mostra quantos aparelhos há quando ativa.
+class _LiveButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final live = context.watch<LiveSession>();
+    final scheme = Theme.of(context).colorScheme;
+    final icon = Icon(
+      live.active ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+      color: live.active ? (live.reconnecting ? scheme.error : scheme.primary) : null,
+    );
+    return IconButton(
+      tooltip: 'Ao vivo',
+      icon: live.active
+          ? Badge(label: Text('${live.peers.length}'), child: icon)
+          : icon,
+      onPressed: () =>
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const LivePage())),
+    );
+  }
+}
+
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
   @override
@@ -105,6 +128,7 @@ class _LibraryPageState extends State<LibraryPage> with SingleTickerProviderStat
           tabs: const [Tab(text: 'Músicas'), Tab(text: 'Repertórios')],
         ),
         actions: [
+          _LiveButton(),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Configurações',

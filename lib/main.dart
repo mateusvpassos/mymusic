@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'data/store.dart';
+import 'live/live_follower.dart';
+import 'live/live_session.dart';
 import 'sync/drive_sync.dart';
 import 'ui/library_page.dart';
 
@@ -10,8 +12,9 @@ void main() {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   final state = AppState();
   final sync = SyncState();
+  final live = LiveSession(state);
   state.onPersist = () => sync.scheduleAuto(state);
-  runApp(MyApp(state: state, sync: sync));
+  runApp(MyApp(state: state, sync: sync, live: live));
   state.load();
   sync.trySilent().then((_) {
     if (sync.signedIn) sync.sync(state);
@@ -21,7 +24,8 @@ void main() {
 class MyApp extends StatelessWidget {
   final AppState state;
   final SyncState sync;
-  const MyApp({super.key, required this.state, required this.sync});
+  final LiveSession live;
+  const MyApp({super.key, required this.state, required this.sync, required this.live});
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +33,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: state),
         ChangeNotifierProvider.value(value: sync),
+        ChangeNotifierProvider.value(value: live),
       ],
       child: Consumer<AppState>(
         builder: (context, st, _) {
@@ -109,7 +114,7 @@ class MyApp extends StatelessWidget {
                 textStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500, fontSize: 15),
               ),
             ),
-            home: const LibraryPage(),
+            home: const LiveFollower(child: LibraryPage()),
           );
         },
       ),

@@ -32,7 +32,7 @@ void main() {
       if (gi == null) continue;
       final m = p.glyphInfoMap[gi]!;
       advance ??= m.advanceWidth;
-      expect(m.advanceWidth, closeTo(advance!, 0.001), reason: 'não é monoespaçada');
+      expect(m.advanceWidth, closeTo(advance, 0.001), reason: 'não é monoespaçada');
       if (m.top < top) top = m.top;
       if (m.bottom > bottom) bottom = m.bottom;
     }

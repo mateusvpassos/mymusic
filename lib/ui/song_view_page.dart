@@ -11,6 +11,7 @@ import '../core/image_export.dart';
 import '../core/pdf_export.dart';
 import '../core/pedal.dart';
 import '../data/store.dart';
+import '../live/live_session.dart';
 import '../models/song.dart';
 import 'song_edit_page.dart';
 import 'widgets/chord_chart.dart';
@@ -27,6 +28,10 @@ class SongViewPage extends StatefulWidget {
   });
   @override
   State<SongViewPage> createState() => _SongViewPageState();
+
+  /// Quantas telas de música estão abertas — a sessão ao vivo abre uma
+  /// quando quem conduz troca de música e quem segue está em outra tela.
+  static int openCount = 0;
 }
 
 class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderStateMixin {
@@ -42,6 +47,13 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   late final Ticker _ticker;
   Duration _last = Duration.zero;
 
+  // sessão ao vivo
+  late final LiveSession _live = context.read<LiveSession>();
+  StreamSubscription<LiveNav>? _navSub;
+  StreamSubscription<LiveScroll>? _scrollSub;
+  Timer? _scrollPub;
+  bool _scrollDirty = false;
+
   // navegação: setlist (se veio de um repertório) OU toda a biblioteca
   List<String> get _list =>
       widget.setlistSongIds ?? context.read<AppState>().songs.map((s) => s.id).toList();
@@ -55,7 +67,96 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     _ticker = createTicker(_onTick);
     WakelockPlus.enable();
     _loadTranspose();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    SongViewPage.openCount++;
+    _navSub = _live.navStream.listen(_onRemoteNav);
+    _scrollSub = _live.scrollStream.listen(_onRemoteScroll);
+    _scroll.addListener(_onScrollChanged);
+    // seguindo e abrindo a mesma música de quem conduz: já cai no tom dele
+    final n = _live.lastNav;
+    if (_live.following && n != null && n.songId == _songId) _transpose = n.transpose;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focus.requestFocus();
+      if (_live.conducting) {
+        _publishNav();
+      } else if (_live.following && _live.lastScroll?.songId == _songId) {
+        _onRemoteScroll(_live.lastScroll!);
+      }
+    });
+  }
+
+  // ---- sessão ao vivo ----
+
+  void _publishNav() {
+    if (!_live.conducting) return;
+    final st = context.read<AppState>();
+    final s = st.songById(_songId);
+    if (s == null) return;
+    final sl = widget.setlistId == null ? null : st.setlistById(widget.setlistId!);
+    _live.publishNav(s, setlist: sl, transpose: _transpose);
+  }
+
+  // rolagem em fração da altura do CONTEÚDO (sem o respiro de 60% da tela
+  // no fim): aparelhos de tamanho e fonte diferentes caem no mesmo trecho
+  double _contentH() {
+    final p = _scroll.position;
+    return p.maxScrollExtent + p.viewportDimension - MediaQuery.of(context).size.height * 0.6;
+  }
+
+  // manda no máximo a cada 120ms, mas sempre a última posição
+  void _onScrollChanged() {
+    if (!_live.conducting || !_scroll.hasClients) return;
+    if (_scrollPub?.isActive ?? false) {
+      _scrollDirty = true;
+      return;
+    }
+    _sendScroll();
+    _scrollPub = Timer(const Duration(milliseconds: 120), () {
+      if (_scrollDirty && mounted) {
+        _scrollDirty = false;
+        _sendScroll();
+      }
+    });
+  }
+
+  void _sendScroll() {
+    final h = _contentH();
+    _live.publishScroll(_songId, h <= 0 ? 0 : (_scroll.offset / h).clamp(0.0, 1.0));
+  }
+
+  void _onRemoteScroll(LiveScroll r) {
+    if (r.songId != _songId || !_scroll.hasClients) return;
+    final alvo = (r.frac * _contentH()).clamp(0.0, _scroll.position.maxScrollExtent);
+    if ((alvo - _scroll.offset).abs() < 1) return;
+    _scroll.animateTo(alvo, duration: const Duration(milliseconds: 160), curve: Curves.linear);
+  }
+
+  void _onRemoteNav(LiveNav n) {
+    if (!mounted) return;
+    if (n.songId == _songId) {
+      if (n.transpose != _transpose) setState(() => _transpose = n.transpose);
+      return;
+    }
+    // quem conduz foi p/ outro repertório (ou p/ a biblioteca): reabre no
+    // contexto certo, p/ o "próxima música" daqui bater com o de lá
+    if (n.setlistId != widget.setlistId) {
+      final sl = n.setlistId == null ? null : context.read<AppState>().setlistById(n.setlistId!);
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => SongViewPage(
+          songId: n.songId,
+          setlistId: sl?.id,
+          setlistSongIds: sl == null ? null : List.of(sl.songIds),
+        ),
+      ));
+      return;
+    }
+    final i = _list.indexOf(n.songId);
+    if (i >= 0) {
+      _gotoSong(i);
+    } else {
+      setState(() => _songId = n.songId);
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+    }
+    setState(() => _transpose = n.transpose);
   }
 
   void _loadTranspose() {
@@ -83,6 +184,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   void _setTranspose(int v) {
     setState(() => _transpose = v);
     _saveTranspose();
+    _publishNav();
   }
 
   void _onTick(Duration elapsed) {
@@ -144,6 +246,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     _loadTranspose();
     if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() {});
+    _publishNav();
   }
 
   KeyEventResult _onKey(FocusNode _, KeyEvent e) {
@@ -271,6 +374,10 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    SongViewPage.openCount--;
+    _navSub?.cancel();
+    _scrollSub?.cancel();
+    _scrollPub?.cancel();
     _metro?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WakelockPlus.disable();
@@ -283,6 +390,7 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final st = context.watch<AppState>();
+    final live = context.watch<LiveSession>();
     final base = st.songById(_songId);
     if (base == null) {
       return const Scaffold(body: Center(child: Text('Música não encontrada')));
@@ -317,6 +425,20 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                       '${_hasNav ? '  •  ${_idx + 1}/${_list.length}' : ''}',
                       style: TextStyle(fontSize: 12, color: scheme.primary),
                     ),
+                    if (live.active)
+                      Text(
+                        live.reconnecting
+                            ? 'ao vivo: reconectando...'
+                            : live.conducting
+                                ? 'ao vivo: conduzindo (${live.others} seguindo)'
+                                : live.following
+                                    ? 'ao vivo: seguindo'
+                                    : 'ao vivo: livre',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: live.reconnecting ? scheme.error : scheme.tertiary),
+                      ),
                   ],
                 ),
                 actions: [

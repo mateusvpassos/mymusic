@@ -28,6 +28,12 @@ class AppState extends ChangeNotifier {
   /// Chamado após cada gravação (usado p/ sync automático no Drive).
   void Function()? onPersist;
 
+  /// Mudança feita AQUI (não recebida de outro aparelho) — a sessão ao vivo
+  /// usa p/ repassar aos outros. Quem chega via applyRemote* não dispara,
+  /// senão a mensagem voltaria em eco.
+  void Function(Song s)? onLocalSong;
+  void Function(Setlist sl)? onLocalSetlist;
+
   Future<void> load() async {
     final dir = await getApplicationDocumentsDirectory();
     _file = File('${dir.path}/mymusic_data.json');
@@ -171,6 +177,7 @@ class AppState extends ChangeNotifier {
     }
     _songSnaps[s.id] = agora;
     touch();
+    onLocalSong?.call(s);
   }
 
   void deleteSong(String id) {
@@ -197,6 +204,7 @@ class AppState extends ChangeNotifier {
     _songSnaps[c.id] = _snapOf(c);
     _log('duplicou', 'musica', c.title, id: c.id, details: ['Cópia de "${s.title}"']);
     touch();
+    onLocalSong?.call(c);
     return c;
   }
 
@@ -217,6 +225,7 @@ class AppState extends ChangeNotifier {
     }
     _setSnaps[sl.id] = agora;
     touch();
+    onLocalSetlist?.call(sl);
   }
 
   Setlist duplicateSetlist(Setlist sl) {
@@ -231,6 +240,7 @@ class AppState extends ChangeNotifier {
     _log('duplicou', 'repertorio', c.name,
         id: c.id, details: ['Cópia de "${sl.name}"']);
     touch();
+    onLocalSetlist?.call(c);
     return c;
   }
 
@@ -247,6 +257,66 @@ class AppState extends ChangeNotifier {
   void updateSettings(void Function(AppSettings) fn) {
     fn(settings);
     touch();
+  }
+
+  // ---- vindo de outro aparelho (sessão ao vivo) ----
+
+  /// Aplica música recebida se for mais nova que a daqui (ou não existir).
+  /// Devolve a versão local quando a daqui é mais nova, p/ quem mandou
+  /// poder se corrigir; null quando aplicou ou é igual.
+  Song? applyRemoteSong(Song s, {String de = ''}) {
+    final i = songs.indexWhere((x) => x.id == s.id);
+    if (i >= 0) {
+      final local = songs[i];
+      if (local.updatedAt.isAfter(s.updatedAt)) return local;
+      if (!s.updatedAt.isAfter(local.updatedAt)) return null; // igual
+    }
+    final antes = _songSnaps[s.id];
+    final agora = _snapOf(s);
+    if (i >= 0) {
+      songs[i] = s;
+    } else {
+      songs.insert(0, s);
+    }
+    _songSnaps[s.id] = agora;
+    final d = antes?.diff(agora) ?? const <String>[];
+    if (antes == null || d.isNotEmpty) {
+      _log(antes == null ? 'recebeu' : 'editou', 'musica', s.title,
+          id: s.id, details: [if (de.isNotEmpty) 'Pela sessão ao vivo ($de)', ...d]);
+    }
+    touch();
+    return null;
+  }
+
+  Setlist? applyRemoteSetlist(Setlist sl, {String de = ''}) {
+    final i = setlists.indexWhere((x) => x.id == sl.id);
+    if (i >= 0) {
+      final local = setlists[i];
+      if (local.updatedAt.isAfter(sl.updatedAt)) return local;
+      if (!sl.updatedAt.isAfter(local.updatedAt)) return null;
+    }
+    final antes = _setSnaps[sl.id];
+    final agora = _snapOfSet(sl);
+    if (i >= 0) {
+      setlists[i] = sl;
+    } else {
+      setlists.insert(0, sl);
+    }
+    _setSnaps[sl.id] = agora;
+    final d = antes?.diff(agora, _titleOf) ?? const <String>[];
+    if (antes == null || d.isNotEmpty) {
+      _log(antes == null ? 'recebeu' : 'editou', 'repertorio', sl.name,
+          id: sl.id, details: [if (de.isNotEmpty) 'Pela sessão ao vivo ($de)', ...d]);
+    }
+    touch();
+    return null;
+  }
+
+  Setlist? setlistById(String id) {
+    for (final s in setlists) {
+      if (s.id == id) return s;
+    }
+    return null;
   }
 
   /// Registra algo que não passa pelas mutações (sync, exportação...).

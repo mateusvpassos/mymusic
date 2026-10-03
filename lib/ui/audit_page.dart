@@ -22,11 +22,15 @@ class _AuditPageState extends State<AuditPage> {
     'importou': Icons.download_outlined,
     'exportou': Icons.ios_share,
     'sincronizou': Icons.cloud_done_outlined,
+    'recebeu': Icons.wifi_tethering,
+    'entrou': Icons.login,
+    'saiu': Icons.logout,
   };
 
   Color _cor(ColorScheme s, String action) {
     switch (action) {
       case 'criou':
+      case 'recebeu':
         return Colors.green.shade600;
       case 'excluiu':
         return s.error;
@@ -64,7 +68,7 @@ class _AuditPageState extends State<AuditPage> {
   bool _passa(AuditEvent e) {
     final okFiltro = _filtro == 'tudo' ||
         (_filtro == 'outros'
-            ? e.entity != 'musica' && e.entity != 'repertorio'
+            ? !const {'musica', 'repertorio', 'sessao'}.contains(e.entity)
             : e.entity == _filtro);
     if (!okFiltro) return false;
     if (_busca.isEmpty) return true;
@@ -133,6 +137,7 @@ class _AuditPageState extends State<AuditPage> {
                   ['tudo', 'Tudo'],
                   ['musica', 'Músicas'],
                   ['repertorio', 'Repertórios'],
+                  ['sessao', 'Ao vivo'],
                   ['outros', 'Outros'],
                 ])
                   Padding(
@@ -265,6 +270,8 @@ class _AuditPageState extends State<AuditPage> {
         return 'o backup';
       case 'config':
         return 'a configuração';
+      case 'sessao':
+        return 'na sessão:';
       default:
         return entity;
     }
