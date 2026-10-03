@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
+import '../cloud/cloud_page.dart';
+import '../cloud/cloud_state.dart';
+import '../cloud/suggestions_page.dart';
 import '../core/liturgia.dart';
 import '../core/search.dart';
 import '../data/store.dart';
@@ -147,6 +150,7 @@ class _LibraryPageState extends State<LibraryPage>
           ],
         ),
         actions: [
+          const _CloudButtons(),
           _LiveButton(),
           IconButton(
             icon: const Icon(Icons.tune),
@@ -214,7 +218,11 @@ class _LibraryPageState extends State<LibraryPage>
 
   Widget _songCard(AppState st, Song s, {String? trecho, SongUse? uso}) {
     final scheme = Theme.of(context).colorScheme;
+    final cloud = context.watch<CloudState>();
     final meta = <String>[
+      // no grupo: de quem é (as minhas não precisam dizer)
+      if (cloud.ativa && s.dono.isNotEmpty && s.dono != cloud.eu)
+        'de ${cloud.nomeDe(s.dono)}',
       if (s.artist.isNotEmpty) s.artist,
       if (s.bpm > 0) '${s.bpm} BPM',
       // pelos repertórios com data já passada
@@ -323,10 +331,15 @@ class _LibraryPageState extends State<LibraryPage>
               );
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Editar')),
-            PopupMenuItem(value: 'dup', child: Text('Duplicar')),
-            PopupMenuItem(value: 'del', child: Text('Excluir')),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'edit',
+              child: Text(cloud.podeEditarSong(s) ? 'Editar' : 'Sugerir mudança'),
+            ),
+            const PopupMenuItem(value: 'dup', child: Text('Duplicar')),
+            // no grupo só o dono apaga
+            if (cloud.souDono(s.dono))
+              const PopupMenuItem(value: 'del', child: Text('Excluir')),
           ],
         ),
         onTap: () => Navigator.push(
@@ -508,6 +521,44 @@ class _LibraryPageState extends State<LibraryPage>
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Nuvem: sugestões esperando (com contador) e o grupo.
+class _CloudButtons extends StatelessWidget {
+  const _CloudButtons();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<CloudState>();
+    if (!c.disponivel) return const SizedBox.shrink();
+    final n = c.paraDecidir.length;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (c.ativa)
+          IconButton(
+            tooltip: 'Sugestões',
+            icon: Badge(
+              isLabelVisible: n > 0,
+              label: Text('$n'),
+              child: const Icon(Icons.inbox_outlined),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SuggestionsPage()),
+            ),
+          ),
+        IconButton(
+          tooltip: c.ativa ? 'Grupo: ${c.grupo!.nome}' : 'Grupo do ministério',
+          icon: Icon(c.ativa ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CloudPage()),
+          ),
+        ),
+      ],
     );
   }
 }

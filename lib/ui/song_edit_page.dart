@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../cloud/cloud_state.dart';
 import '../core/chord_engine.dart';
 import '../core/liturgia.dart';
 import '../data/store.dart';
@@ -37,6 +38,9 @@ class _SongEditPageState extends State<SongEditPage> {
   late TextEditingController _bpm;
   final List<DateTime> _taps = [];
   int _mode = 0; // 0 = Acordes (visual), 1 = Texto
+  // música de outra pessoa sem permissão p/ editar: salvar vira sugestão
+  late final bool _sugestao;
+  late final String _donoNome;
   final List<String> _undo = [];
   String _current = '';
 
@@ -75,6 +79,9 @@ class _SongEditPageState extends State<SongEditPage> {
     SongEditPage.openCount++;
     final src =
         widget.novo ?? context.read<AppState>().songById(widget.songId)!;
+    final cloud = context.read<CloudState>();
+    _sugestao = widget.novo == null && !cloud.podeEditarSong(src);
+    _donoNome = cloud.nomeDe(src.dono);
     _song = src.copy();
     ChordEngine.trimSectionEnds(_song.sections);
     _title = TextEditingController(text: _song.title);
@@ -133,7 +140,7 @@ class _SongEditPageState extends State<SongEditPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, 'salvar'),
-            child: const Text('Salvar'),
+            child: Text(_sugestao ? 'Enviar sugestão' : 'Salvar'),
           ),
         ],
       ),
@@ -183,7 +190,7 @@ class _SongEditPageState extends State<SongEditPage> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_mode == 1) _applyText();
     _song.title = _title.text.trim().isEmpty
         ? 'Sem título'
@@ -192,8 +199,47 @@ class _SongEditPageState extends State<SongEditPage> {
     _song.key = _key.text.trim().isEmpty ? 'C' : _key.text.trim();
     _song.notes = _notes.text.trim();
     _song.bpm = int.tryParse(_bpm.text.trim()) ?? 0;
+    if (_sugestao) {
+      final nota = await _pedirNota();
+      if (nota == null || !mounted) return;
+      await context.read<CloudState>().sugerir(_song, nota: nota);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sugestão enviada — $_donoNome decide se aceita')),
+      );
+      Navigator.pop(context);
+      return;
+    }
     context.read<AppState>().upsertSong(_song);
     Navigator.pop(context);
+  }
+
+  /// Recado opcional junto da sugestão. null = desistiu.
+  Future<String?> _pedirNota() {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Enviar sugestão'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Recado p/ o dono (opcional) — ex.: acorde errado no refrão',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _applyText() {
@@ -288,7 +334,7 @@ class _SongEditPageState extends State<SongEditPage> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Editar'),
+        title: Text(_sugestao ? 'Sugerir mudança' : 'Editar'),
         actions: [
           IconButton(
             tooltip: 'Desfazer',
@@ -307,14 +353,27 @@ class _SongEditPageState extends State<SongEditPage> {
           ),
           TextButton.icon(
             onPressed: _save,
-            icon: const Icon(Icons.check),
-            label: const Text('Salvar'),
+            icon: Icon(_sugestao ? Icons.outgoing_mail : Icons.check),
+            label: Text(_sugestao ? 'Enviar sugestão' : 'Salvar'),
           ),
         ],
       ),
       body: Column(
         children: [
-          _meta(scheme),
+          if (_sugestao)
+            Container(
+              width: double.infinity,
+              color: scheme.tertiaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Esta música é de $_donoNome. O que você mudar vai como '
+                'sugestão — $_donoNome aceita ou não.',
+                style: TextStyle(color: scheme.onTertiaryContainer),
+              ),
+            ),
+          // com o teclado aberto (ou tablet deitado) os campos encolhem e
+          // rolam, em vez de estourar a tela
+          Flexible(child: SingleChildScrollView(child: _meta(scheme))),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: SegmentedButton<int>(

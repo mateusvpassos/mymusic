@@ -1,3 +1,5 @@
+import '../cloud/cloud_page.dart';
+import '../cloud/cloud_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -135,6 +137,24 @@ class SettingsPage extends StatelessWidget {
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const AuditPage())),
             ),
+          ]),
+          _card('Grupo do ministério (nuvem)', [
+            Builder(builder: (context) {
+              final c = context.watch<CloudState>();
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(c.ativa ? Icons.cloud_done : Icons.cloud_off),
+                title: Text(c.ativa ? c.grupo!.nome : 'Não conectado'),
+                subtitle: Text(!c.disponivel
+                    ? 'Ainda não configurada'
+                    : c.ativa
+                        ? '${c.nome} • as músicas sincronizam pelo grupo'
+                        : 'Dono, sugestões, versões e permissões'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const CloudPage())),
+              );
+            }),
           ]),
           _card('Google Drive', [_drive(context, st)]),
           const SizedBox(height: 16),

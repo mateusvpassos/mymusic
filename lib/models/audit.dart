@@ -90,7 +90,12 @@ class SongSnap {
       momentos.isEmpty ? '—' : momentos,
       o.momentos.isEmpty ? '—' : o.momentos,
     );
-    if (notes != o.notes) d.add('Observações alteradas');
+    if (notes != o.notes) {
+      // curtas cabem inteiras: dá p/ ver o que mudou sem abrir a música
+      d.add(notes.length <= 60 && o.notes.length <= 60
+          ? 'Anotações: ${notes.isEmpty ? '—' : notes} → ${o.notes.isEmpty ? '—' : o.notes}'
+          : 'Anotações alteradas');
+    }
     if (contentHash != o.contentHash) {
       d.add(
         lines == o.lines

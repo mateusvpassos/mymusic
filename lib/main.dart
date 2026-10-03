@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'cloud/cloud_config.dart';
+import 'cloud/cloud_state.dart';
 import 'data/store.dart';
 import 'live/live_follower.dart';
 import 'live/live_session.dart';
@@ -13,20 +15,40 @@ void main() {
   final state = AppState();
   final sync = SyncState();
   final live = LiveSession(state);
-  state.onPersist = () => sync.scheduleAuto(state);
-  runApp(MyApp(state: state, sync: sync, live: live));
+  final cloud = CloudState(state);
+  // com o grupo da nuvem ligado é ele que sincroniza; o Drive vira só backup
+  // (dois caminhos mesclando a mesma música davam versão misturada)
+  state.onPersist = () {
+    if (!state.cloudAtiva && !CloudConfig.emulador) sync.scheduleAuto(state);
+  };
+  runApp(MyApp(state: state, sync: sync, live: live, cloud: cloud));
   // sync só depois do arquivo local carregado: antes os dois corriam juntos e,
   // se a leitura terminasse por último, apagava o que o sync tinha mesclado
-  state.load().then((_) => sync.trySilent()).then((_) {
-    if (sync.signedIn) sync.sync(state);
-  });
+  _boot(state, sync, cloud);
+}
+
+Future<void> _boot(AppState state, SyncState sync, CloudState cloud) async {
+  await state.load();
+  await CloudConfig.init();
+  await cloud.init();
+  // build de teste (emulador do Firebase) nunca encosta no Drive de verdade
+  if (cloud.vaiUsarGrupo || CloudConfig.emulador) return;
+  await sync.trySilent();
+  if (sync.signedIn) await sync.sync(state);
 }
 
 class MyApp extends StatelessWidget {
   final AppState state;
   final SyncState sync;
   final LiveSession live;
-  const MyApp({super.key, required this.state, required this.sync, required this.live});
+  final CloudState cloud;
+  const MyApp({
+    super.key,
+    required this.state,
+    required this.sync,
+    required this.live,
+    required this.cloud,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +57,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: state),
         ChangeNotifierProvider.value(value: sync),
         ChangeNotifierProvider.value(value: live),
+        ChangeNotifierProvider.value(value: cloud),
       ],
       child: Consumer<AppState>(
         builder: (context, st, _) {

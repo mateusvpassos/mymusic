@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// MyMusic — biblioteca compartilhada do ministério.
+//
+// grupos/{g}                       nome, dono (e-mail), membros [e-mails]
+// grupos/{g}/pessoas/{email}       nome de quem é do grupo
+// grupos/{g}/confianca/{dono}      editores [e-mails] que mexem em TODAS as músicas/repertórios de {dono}
+// grupos/{g}/musicas/{id}          música + dono, editores, versao, atualizadoPor, apagada
+// grupos/{g}/musicas/{id}/versoes/{n}   retrato completo de cada gravação (imutável)
+// grupos/{g}/repertorios/{id}      repertório + dono, editores, apagada
+// grupos/{g}/sugestoes/{id}        mudança proposta por quem não pode editar
+//
+// E-mails sempre em minúsculas.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function eu() {
+      return request.auth != null && request.auth.token.email != null
+        ? request.auth.token.email.lower() : '';
+    }
+
+    function grupo(g) {
+      return get(/databases/$(database)/documents/grupos/$(g)).data;
+    }
+
+    function membro(g) {
+      let gr = grupo(g);
+      return eu() != '' && (eu() == gr.dono || eu() in gr.membros);
+    }
+
+    function confia(g, dono) {
+      let p = /databases/$(database)/documents/grupos/$(g)/confianca/$(dono);
+      return exists(p) && eu() in get(p).data.editores;
+    }
+
+    // dono, editor da própria música/repertório, ou alguém em quem o dono confia
+    function podeEditar(g, d) {
+      return eu() == d.dono || eu() in d.get('editores', []) || confia(g, d.dono);
+    }
+
+    function soMudou(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    match /grupos/{g} {
+      allow read: if eu() != '' && (eu() == resource.data.dono || eu() in resource.data.membros);
+      allow create: if eu() != '' && request.resource.data.dono == eu()
+        && request.resource.data.membros is list;
+      // só o dono do grupo convida/remove gente; dono do grupo não muda
+      allow update: if eu() == resource.data.dono && request.resource.data.dono == resource.data.dono;
+      allow delete: if false;
+
+      // nome de cada membro p/ mostrar nas telas; cada um grava o seu
+      match /pessoas/{email} {
+        allow read: if membro(g);
+        allow write: if membro(g) && eu() == email;
+      }
+
+      match /confianca/{dono} {
+        allow read: if membro(g);
+        allow write: if membro(g) && eu() == dono;
+      }
+
+      match /musicas/{id} {
+        allow read: if membro(g);
+        // quem cria é o dono
+        allow create: if membro(g) && request.resource.data.dono == eu()
+          && request.resource.data.get('editores', []) is list;
+        allow update: if membro(g) && podeEditar(g, resource.data)
+          // ninguém troca o dono
+          && request.resource.data.dono == resource.data.dono
+          // só o dono mexe em quem pode editar e apaga/restaura a música
+          && (eu() == resource.data.dono
+              || (request.resource.data.get('editores', []) == resource.data.get('editores', [])
+                  && request.resource.data.get('apagada', false) == resource.data.get('apagada', false)));
+        allow delete: if false; // apagar = marcar apagada (vira lápide p/ quem está offline)
+
+        match /versoes/{n} {
+          allow read: if membro(g);
+          // a versão vai no mesmo lote da gravação da música: confere a música JÁ gravada
+          allow create: if membro(g) && request.resource.data.por == eu()
+            && podeEditar(g, getAfter(/databases/$(database)/documents/grupos/$(g)/musicas/$(id)).data);
+          allow update, delete: if false;
+        }
+      }
+
+      match /repertorios/{id} {
+        allow read: if membro(g);
+        allow create: if membro(g) && request.resource.data.dono == eu();
+        allow update: if membro(g) && podeEditar(g, resource.data)
+          && request.resource.data.dono == resource.data.dono
+          && (eu() == resource.data.dono
+              || (request.resource.data.get('editores', []) == resource.data.get('editores', [])
+                  && request.resource.data.get('apagada', false) == resource.data.get('apagada', false)));
+        allow delete: if false;
+      }
+
+      match /sugestoes/{id} {
+        allow read: if membro(g);
+        allow create: if membro(g) && request.resource.data.por == eu()
+          && request.resource.data.status == 'pendente';
+        allow update: if membro(g) && resource.data.status == 'pendente' && (
+          // quem pode editar a música decide
+          (request.resource.data.status in ['aceita', 'recusada']
+            && request.resource.data.decididoPor == eu()
+            && podeEditar(g, get(/databases/$(database)/documents/grupos/$(g)/musicas/$(resource.data.songId)).data)
+            && soMudou(['status', 'decididoPor', 'decididoPorNome', 'decididoEm', 'motivo']))
+          // quem sugeriu pode desistir
+          || (request.resource.data.status == 'cancelada' && resource.data.por == eu()
+            && soMudou(['status', 'decididoEm'])));
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../cloud/cloud_state.dart';
+import '../cloud/permissions_sheet.dart';
 import '../core/chord_engine.dart';
 import '../core/docx_export.dart';
 import '../core/image_export.dart';
@@ -48,6 +50,9 @@ class SetlistPage extends StatelessWidget {
         .map((id) => st.songById(id))
         .whereType<Song>()
         .toList();
+    final cloud = context.watch<CloudState>();
+    // repertório de outra pessoa sem permissão: só ver/tocar/exportar
+    final pode = cloud.podeEditarSetlist(sl);
 
     return Scaffold(
       appBar: AppBar(
@@ -67,23 +72,36 @@ class SetlistPage extends StatelessWidget {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.event),
-            tooltip: 'Data do evento',
-            onPressed: () async {
-              final d = await showDatePicker(
-                context: context,
-                initialDate: sl.date ?? DateTime.now(),
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2100),
-              );
-              if (d != null) {
-                sl.date = d;
-                st.upsertSetlist(sl);
-              }
-            },
-          ),
-          if (sl.moments.isNotEmpty)
+          if (cloud.ativa)
+            IconButton(
+              icon: const Icon(Icons.manage_accounts_outlined),
+              tooltip: 'Dono e quem pode editar',
+              onPressed: () => showPermissions(
+                context,
+                titulo: sl.name,
+                dono: sl.dono,
+                editores: sl.editores,
+                salvar: (l) => cloud.setEditoresSetlist(sl, l),
+              ),
+            ),
+          if (pode)
+            IconButton(
+              icon: const Icon(Icons.event),
+              tooltip: 'Data do evento',
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: sl.date ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) {
+                  sl.date = d;
+                  st.upsertSetlist(sl);
+                }
+              },
+            ),
+          if (pode && sl.moments.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.sort),
               tooltip: 'Ordenar pela ordem da Missa',
@@ -163,100 +181,132 @@ class SetlistPage extends StatelessWidget {
           ),
         ],
       ),
-      body: songs.isEmpty
-          ? Center(
+      body: Column(
+        children: [
+          if (!pode)
+            Container(
+              width: double.infinity,
+              color: Theme.of(context).colorScheme.tertiaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
-                'Vazio — adicione músicas',
-                style: TextStyle(color: Theme.of(context).disabledColor),
+                'Repertório de ${cloud.nomeDe(sl.dono)} — só leitura. '
+                'Para montar o seu, use Duplicar na lista de repertórios.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
+                ),
               ),
-            )
-          : ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
-              itemCount: songs.length,
-              // índices são da lista VISÍVEL; songIds pode ter música que não
-              // existe mais aqui (excluída em outro aparelho) — por isso
-              // reordena os visíveis e deixa os órfãos no fim
-              onReorderItem: (a, b) {
-                final ids = songs.map((s) => s.id).toList();
-                ids.insert(b, ids.removeAt(a));
-                sl.songIds = [
-                  ...ids,
-                  ...sl.songIds.where((x) => !ids.contains(x)),
-                ];
-                st.upsertSetlist(sl);
-              },
-              itemBuilder: (_, i) {
-                final s = songs[i];
-                final momento = sl.moments[s.id];
-                return Card(
-                  key: ValueKey(s.id),
-                  margin: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 4,
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text('${i + 1}')),
-                    title: Text.rich(
-                      TextSpan(
-                        children: [
-                          if (momento != null)
-                            TextSpan(
-                              text: '${momento.toUpperCase()}   ',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          TextSpan(text: s.title),
-                        ],
-                      ),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      '${s.key}${s.artist.isNotEmpty ? '  •  ${s.artist}' : ''}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+            ),
+          Expanded(child: _corpo(context, st, sl, songs, pode)),
+        ],
+      ),
+      floatingActionButton: !pode
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _addSongs(context, st, sl),
+              icon: const Icon(Icons.add),
+              label: const Text('Músicas'),
+            ),
+    );
+  }
+
+  Widget _corpo(
+    BuildContext context,
+    AppState st,
+    Setlist sl,
+    List<Song> songs,
+    bool pode,
+  ) {
+    return songs.isEmpty
+        ? Center(
+            child: Text(
+              'Vazio — adicione músicas',
+              style: TextStyle(color: Theme.of(context).disabledColor),
+            ),
+          )
+        : ReorderableListView.builder(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
+            buildDefaultDragHandles: pode,
+            itemCount: songs.length,
+            // índices são da lista VISÍVEL; songIds pode ter música que não
+            // existe mais aqui (excluída em outro aparelho) — por isso
+            // reordena os visíveis e deixa os órfãos no fim
+            onReorderItem: (a, b) {
+              final ids = songs.map((s) => s.id).toList();
+              ids.insert(b, ids.removeAt(a));
+              sl.songIds = [
+                ...ids,
+                ...sl.songIds.where((x) => !ids.contains(x)),
+              ];
+              st.upsertSetlist(sl);
+            },
+            itemBuilder: (_, i) {
+              final s = songs[i];
+              final momento = sl.moments[s.id];
+              return Card(
+                key: ValueKey(s.id),
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                child: ListTile(
+                  leading: CircleAvatar(child: Text('${i + 1}')),
+                  title: Text.rich(
+                    TextSpan(
                       children: [
-                        IconButton(
-                          icon: Icon(
-                            momento == null ? Icons.label_outline : Icons.label,
+                        if (momento != null)
+                          TextSpan(
+                            text: '${momento.toUpperCase()}   ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
-                          tooltip: 'Momento da Missa',
-                          onPressed: () => _escolherMomento(context, st, sl, s),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: () {
-                            sl.songIds.remove(s.id);
-                            st.upsertSetlist(sl);
-                          },
-                        ),
-                        const Icon(Icons.drag_handle),
+                        TextSpan(text: s.title),
                       ],
                     ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SongViewPage(
-                          songId: s.id,
-                          setlistId: sl.id,
-                          setlistSongIds: List.of(sl.songIds),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    '${s.key}${s.artist.isNotEmpty ? '  •  ${s.artist}' : ''}',
+                  ),
+                  trailing: !pode
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                momento == null
+                                    ? Icons.label_outline
+                                    : Icons.label,
+                              ),
+                              tooltip: 'Momento da Missa',
+                              onPressed: () =>
+                                  _escolherMomento(context, st, sl, s),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: () {
+                                sl.songIds.remove(s.id);
+                                st.upsertSetlist(sl);
+                              },
+                            ),
+                            const Icon(Icons.drag_handle),
+                          ],
                         ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SongViewPage(
+                        songId: s.id,
+                        setlistId: sl.id,
+                        setlistSongIds: List.of(sl.songIds),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addSongs(context, st, sl),
-        icon: const Icon(Icons.add),
-        label: const Text('Músicas'),
-      ),
-    );
+                ),
+              );
+            },
+          );
   }
 
   Future<void> _escolherMomento(

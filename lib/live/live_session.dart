@@ -64,8 +64,8 @@ class LiveSession extends ChangeNotifier {
 
   final AppState app;
   LiveSession(this.app) {
-    app.onLocalSong = _localSong;
-    app.onLocalSetlist = _localSetlist;
+    app.localSongHooks.add(_localSong);
+    app.localSetlistHooks.add(_localSetlist);
   }
 
   final String myId = ChordEngine.uid();
@@ -488,13 +488,15 @@ class LiveSession extends ChangeNotifier {
     _send(m);
   }
 
+  // com a nuvem ligada é ela que leva as edições (respeitando quem pode
+  // editar); aqui só a navegação
   void _localSong(Song s) {
-    if (!active) return;
+    if (!active || app.cloudAtiva) return;
     _send({'t': 'song', 'by': myId, 'song': s.toJson()});
   }
 
   void _localSetlist(Setlist sl) {
-    if (!active) return;
+    if (!active || app.cloudAtiva) return;
     _send({'t': 'setlist', 'by': myId, 'setlist': sl.toJson()});
   }
 
@@ -658,6 +660,7 @@ class LiveSession extends ChangeNotifier {
   Map<String, dynamic>? lastNavRaw, lastScrollRaw;
 
   void _applySong(Song s, String de, WebSocket? from) {
+    if (app.cloudAtiva) return;
     final maisNova = app.applyRemoteSong(s, de: de);
     // a daqui é mais nova: devolve p/ quem mandou se corrigir
     if (maisNova != null) {
@@ -671,6 +674,7 @@ class LiveSession extends ChangeNotifier {
   }
 
   void _applySetlist(Setlist sl, String de, WebSocket? from) {
+    if (app.cloudAtiva) return;
     final maisNova = app.applyRemoteSetlist(sl, de: de);
     if (maisNova != null) {
       final msg = {'t': 'setlist', 'by': myId, 'setlist': maisNova.toJson()};

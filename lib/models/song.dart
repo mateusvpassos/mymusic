@@ -62,6 +62,14 @@ class Song {
   // tempos litúrgicos em que cabe (vazio = qualquer) e momentos da Missa
   List<String> tempos;
   List<String> momentos;
+  // nuvem (grupo do ministério): quem criou, quem mais pode editar, nº da
+  // versão e quem fez a última mudança. Vazio = só neste aparelho.
+  String dono;
+  String donoNome;
+  List<String> editores;
+  int versao;
+  String por;
+  String porNome;
   DateTime updatedAt;
 
   Song({
@@ -77,8 +85,15 @@ class Song {
     this.scrollSpeed = 0,
     List<String>? tempos,
     List<String>? momentos,
+    this.dono = '',
+    this.donoNome = '',
+    List<String>? editores,
+    this.versao = 0,
+    this.por = '',
+    this.porNome = '',
     DateTime? updatedAt,
   }) : sections = sections ?? [],
+       editores = editores ?? [],
        tags = tags ?? [],
        tempos = tempos ?? [],
        momentos = momentos ?? [],
@@ -97,6 +112,8 @@ class Song {
     if (scrollSpeed > 0) 'scrollSpeed': scrollSpeed,
     if (tempos.isNotEmpty) 'tempos': tempos,
     if (momentos.isNotEmpty) 'momentos': momentos,
+    ..._metaJson(dono, donoNome, editores, por, porNome),
+    if (versao > 0) 'versao': versao,
     'updatedAt': updatedAt.toIso8601String(),
   };
 
@@ -115,6 +132,12 @@ class Song {
     scrollSpeed: ((j['scrollSpeed'] ?? 0) as num).toDouble(),
     tempos: (j['tempos'] as List? ?? []).map((e) => e as String).toList(),
     momentos: (j['momentos'] as List? ?? []).map((e) => e as String).toList(),
+    dono: (j['dono'] ?? '') as String,
+    donoNome: (j['donoNome'] ?? '') as String,
+    editores: _strList(j['editores']),
+    versao: ((j['versao'] ?? 0) as num).toInt(),
+    por: (j['por'] ?? '') as String,
+    porNome: (j['porNome'] ?? '') as String,
     updatedAt:
         DateTime.tryParse((j['updatedAt'] ?? '') as String) ?? DateTime.now(),
   );
@@ -132,9 +155,32 @@ class Song {
     scrollSpeed: scrollSpeed,
     tempos: List.of(tempos),
     momentos: List.of(momentos),
+    dono: dono,
+    donoNome: donoNome,
+    editores: List.of(editores),
+    versao: versao,
+    por: por,
+    porNome: porNome,
     updatedAt: updatedAt,
   );
 }
+
+List<String> _strList(dynamic v) =>
+    (v as List? ?? const []).map((e) => e as String).toList();
+
+Map<String, dynamic> _metaJson(
+  String dono,
+  String donoNome,
+  List<String> editores,
+  String por,
+  String porNome,
+) => {
+  if (dono.isNotEmpty) 'dono': dono,
+  if (donoNome.isNotEmpty) 'donoNome': donoNome,
+  if (editores.isNotEmpty) 'editores': editores,
+  if (por.isNotEmpty) 'por': por,
+  if (porNome.isNotEmpty) 'porNome': porNome,
+};
 
 class Setlist {
   String id;
@@ -142,6 +188,12 @@ class Setlist {
   List<String> songIds;
   Map<String, int> transpose; // songId -> semitons (tom salvo no repertório)
   Map<String, String> moments; // songId -> momento da Missa ("Entrada"...)
+  // nuvem: igual à música
+  String dono;
+  String donoNome;
+  List<String> editores;
+  String por;
+  String porNome;
   DateTime? date; // data do evento (opcional)
   DateTime updatedAt;
 
@@ -151,11 +203,17 @@ class Setlist {
     List<String>? songIds,
     Map<String, int>? transpose,
     Map<String, String>? moments,
+    this.dono = '',
+    this.donoNome = '',
+    List<String>? editores,
+    this.por = '',
+    this.porNome = '',
     this.date,
     DateTime? updatedAt,
   }) : songIds = songIds ?? [],
        transpose = transpose ?? {},
        moments = moments ?? {},
+       editores = editores ?? [],
        updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -164,6 +222,7 @@ class Setlist {
     'songIds': songIds,
     'transpose': transpose,
     if (moments.isNotEmpty) 'moments': moments,
+    ..._metaJson(dono, donoNome, editores, por, porNome),
     'date': date?.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -178,6 +237,11 @@ class Setlist {
     moments: (j['moments'] as Map? ?? {}).map(
       (k, v) => MapEntry(k as String, v as String),
     ),
+    dono: (j['dono'] ?? '') as String,
+    donoNome: (j['donoNome'] ?? '') as String,
+    editores: _strList(j['editores']),
+    por: (j['por'] ?? '') as String,
+    porNome: (j['porNome'] ?? '') as String,
     date: (j['date'] != null && (j['date'] as String).isNotEmpty)
         ? DateTime.tryParse(j['date'] as String)
         : null,

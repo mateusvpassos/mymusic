@@ -35,10 +35,35 @@ class AppState extends ChangeNotifier {
   void Function()? onPersist;
 
   /// Mudança feita AQUI (não recebida de outro aparelho) — a sessão ao vivo
-  /// usa p/ repassar aos outros. Quem chega via applyRemote* não dispara,
-  /// senão a mensagem voltaria em eco.
-  void Function(Song s)? onLocalSong;
-  void Function(Setlist sl)? onLocalSetlist;
+  /// e a nuvem usam p/ repassar. Quem chega via applyRemote*/applyCloud* não
+  /// dispara, senão voltaria em eco.
+  final List<void Function(Song s)> localSongHooks = [];
+  final List<void Function(Setlist sl)> localSetlistHooks = [];
+
+  /// Exclusão feita aqui: ('song' | 'setlist', id).
+  final List<void Function(String kind, String id)> localDeleteHooks = [];
+
+  /// Grupo da nuvem ligado: ela é quem leva as edições aos outros (com
+  /// permissão); a sessão ao vivo passa a só sincronizar a navegação.
+  bool cloudAtiva = false;
+
+  void _emitSong(Song s) {
+    for (final h in localSongHooks) {
+      h(s);
+    }
+  }
+
+  void _emitSetlist(Setlist sl) {
+    for (final h in localSetlistHooks) {
+      h(sl);
+    }
+  }
+
+  void _emitDelete(String kind, String id) {
+    for (final h in localDeleteHooks) {
+      h(kind, id);
+    }
+  }
 
   Future<void> load() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -176,6 +201,10 @@ class AppState extends ChangeNotifier {
     touch();
   }
 
+  /// O que mudou de uma versão p/ outra, em português ("Tom: C → D"...).
+  static List<String> resumoMudancas(Song antes, Song depois) =>
+      _snapOf(antes).diff(_snapOf(depois));
+
   static SongSnap _snapOf(Song s) {
     var lines = 0, h = 17;
     for (final sec in s.sections) {
@@ -264,7 +293,7 @@ class AppState extends ChangeNotifier {
     }
     _songSnaps[s.id] = agora;
     touch();
-    onLocalSong?.call(s);
+    _emitSong(s);
   }
 
   void deleteSong(String id) {
@@ -272,6 +301,7 @@ class AppState extends ChangeNotifier {
     final usada = setlists.where((sl) => sl.songIds.contains(id)).toList();
     songs.removeWhere((x) => x.id == id);
     deleted['song:$id'] = DateTime.now();
+    _emitDelete('song', id);
     for (final sl in setlists) {
       if (sl.songIds.remove(id)) _setSnaps[sl.id] = _snapOfSet(sl);
     }
@@ -292,6 +322,13 @@ class AppState extends ChangeNotifier {
   Song duplicateSong(Song s) {
     final c = s.copy();
     c.id = ChordEngine.uid();
+    c
+      ..dono = ''
+      ..donoNome = ''
+      ..editores = []
+      ..versao = 0
+      ..por = ''
+      ..porNome = '';
     c.title = '${s.title} (cópia)';
     c.updatedAt = DateTime.now();
     songs.insert(0, c);
@@ -304,7 +341,7 @@ class AppState extends ChangeNotifier {
       details: ['Cópia de "${s.title}"'],
     );
     touch();
-    onLocalSong?.call(c);
+    _emitSong(c);
     return c;
   }
 
@@ -325,7 +362,7 @@ class AppState extends ChangeNotifier {
     }
     _setSnaps[sl.id] = agora;
     touch();
-    onLocalSetlist?.call(sl);
+    _emitSetlist(sl);
   }
 
   Setlist duplicateSetlist(Setlist sl) {
@@ -346,7 +383,7 @@ class AppState extends ChangeNotifier {
       details: ['Cópia de "${sl.name}"'],
     );
     touch();
-    onLocalSetlist?.call(c);
+    _emitSetlist(c);
     return c;
   }
 
@@ -354,6 +391,7 @@ class AppState extends ChangeNotifier {
     final sl = setlists.where((s) => s.id == id).firstOrNull;
     setlists.removeWhere((s) => s.id == id);
     deleted['setlist:$id'] = DateTime.now();
+    _emitDelete('setlist', id);
     _setSnaps.remove(id);
     _log(
       'excluiu',
@@ -431,6 +469,111 @@ class AppState extends ChangeNotifier {
     }
     touch();
     return null;
+  }
+
+  // ---- vindo da nuvem ----
+
+  /// Música do grupo. [forcar] = a da nuvem vale mesmo sendo mais velha
+  /// (música que este aparelho não pode editar: mudança local, tipo capo,
+  /// não pode segurar a versão oficial).
+  void applyCloudSong(Song s, {bool forcar = false}) {
+    final i = songs.indexWhere((x) => x.id == s.id);
+    if (i >= 0 && !forcar) {
+      final local = songs[i];
+      final maisNova =
+          s.versao > local.versao ||
+          (s.versao == local.versao && s.updatedAt.isAfter(local.updatedAt));
+      if (!maisNova) {
+        // mesma versão: só atualiza o que é da nuvem (dono/editores)
+        if (local.dono != s.dono ||
+            local.editores.join(',') != s.editores.join(',')) {
+          local
+            ..dono = s.dono
+            ..donoNome = s.donoNome
+            ..editores = s.editores;
+          touch();
+        }
+        return;
+      }
+    }
+    final antes = _songSnaps[s.id];
+    final agora = _snapOf(s);
+    if (i >= 0) {
+      songs[i] = s;
+    } else {
+      songs.insert(0, s);
+    }
+    deleted.remove('song:${s.id}');
+    _songSnaps[s.id] = agora;
+    final d = antes?.diff(agora) ?? const <String>[];
+    if (antes == null || d.isNotEmpty) {
+      _log(
+        antes == null ? 'recebeu' : 'editou',
+        'musica',
+        s.title,
+        id: s.id,
+        details: [
+          if (s.porNome.isNotEmpty || s.por.isNotEmpty)
+            'Por ${s.porNome.isNotEmpty ? s.porNome : s.por} (nuvem)',
+          ...d,
+        ],
+      );
+    }
+    touch();
+  }
+
+  void applyCloudSetlist(Setlist sl, {bool forcar = false}) {
+    final i = setlists.indexWhere((x) => x.id == sl.id);
+    if (i >= 0 && !forcar && !sl.updatedAt.isAfter(setlists[i].updatedAt)) {
+      return;
+    }
+    final antes = _setSnaps[sl.id];
+    final agora = _snapOfSet(sl);
+    if (i >= 0) {
+      setlists[i] = sl;
+    } else {
+      setlists.insert(0, sl);
+    }
+    deleted.remove('setlist:${sl.id}');
+    _setSnaps[sl.id] = agora;
+    final d = antes?.diff(agora, _titleOf) ?? const <String>[];
+    if (antes == null || d.isNotEmpty) {
+      _log(
+        antes == null ? 'recebeu' : 'editou',
+        'repertorio',
+        sl.name,
+        id: sl.id,
+        details: [
+          if (sl.porNome.isNotEmpty || sl.por.isNotEmpty)
+            'Por ${sl.porNome.isNotEmpty ? sl.porNome : sl.por} (nuvem)',
+          ...d,
+        ],
+      );
+    }
+    touch();
+  }
+
+  /// Apagada no grupo por quem pode (o dono).
+  void removeByCloud(String kind, String id, {String por = ''}) {
+    if (kind == 'song') {
+      final s = songById(id);
+      if (s == null) return;
+      songs.removeWhere((x) => x.id == id);
+      _songSnaps.remove(id);
+      _log('excluiu', 'musica', s.title, id: id, details: [
+        if (por.isNotEmpty) 'Por $por (nuvem)',
+      ]);
+    } else {
+      final sl = setlistById(id);
+      if (sl == null) return;
+      setlists.removeWhere((x) => x.id == id);
+      _setSnaps.remove(id);
+      _log('excluiu', 'repertorio', sl.name, id: id, details: [
+        if (por.isNotEmpty) 'Por $por (nuvem)',
+      ]);
+    }
+    deleted['$kind:$id'] = DateTime.now();
+    touch();
   }
 
   Setlist? setlistById(String id) {

@@ -4,6 +4,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../cloud/cloud_state.dart';
+import '../cloud/permissions_sheet.dart';
+import '../cloud/versions_page.dart';
 import '../core/chord_engine.dart';
 import '../core/chord_shapes.dart';
 import '../core/docx_export.dart';
@@ -212,6 +215,11 @@ class _SongViewPageState extends State<SongViewPage>
     // seguindo a sessão o tom daqui é só deste aparelho: gravar no
     // repertório espalharia p/ os outros (a edição do repertório é enviada)
     if (widget.setlistId == null || _live.following) return;
+    // repertório de outra pessoa sem permissão: o tom fica só aqui
+    final sl0 = context.read<AppState>().setlistById(widget.setlistId!);
+    if (sl0 != null && !context.read<CloudState>().podeEditarSetlist(sl0)) {
+      return;
+    }
     final st = context.read<AppState>();
     final i = st.setlists.indexWhere((s) => s.id == widget.setlistId);
     if (i < 0) return;
@@ -598,6 +606,40 @@ class _SongViewPageState extends State<SongViewPage>
                     tooltip: 'Tela cheia',
                     onPressed: _toggleFull,
                   ),
+                  if (context.watch<CloudState>().ativa)
+                    PopupMenuButton<String>(
+                      tooltip: 'Histórico e permissões',
+                      icon: const Icon(Icons.history),
+                      onSelected: (v) {
+                        final c = context.read<CloudState>();
+                        if (v == 'hist') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => VersionsPage(songId: base.id),
+                            ),
+                          ).then((_) => _aplicarPendente());
+                        } else {
+                          showPermissions(
+                            context,
+                            titulo: base.title,
+                            dono: base.dono,
+                            editores: base.editores,
+                            salvar: (l) => c.setEditoresSong(base, l),
+                          );
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'hist',
+                          child: Text('Histórico e versões'),
+                        ),
+                        PopupMenuItem(
+                          value: 'perm',
+                          child: Text('Dono e quem pode editar'),
+                        ),
+                      ],
+                    ),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Editar',

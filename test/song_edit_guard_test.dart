@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mymusic/cloud/cloud_state.dart';
 import 'package:mymusic/data/store.dart';
 import 'package:mymusic/models/song.dart';
 import 'package:mymusic/ui/song_edit_page.dart';
 import 'package:provider/provider.dart';
 
-Widget _app(AppState st, Widget page) => ChangeNotifierProvider.value(
-      value: st,
+Widget _app(AppState st, Widget page) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: st),
+        // nuvem desligada (sem Firebase no teste): tudo editável
+        ChangeNotifierProvider(create: (_) => CloudState(st)),
+      ],
       child: MaterialApp(
         home: Builder(
           builder: (ctx) => Scaffold(
