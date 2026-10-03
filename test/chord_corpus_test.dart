@@ -170,7 +170,7 @@ void main() {
 
   group('grafia ao transpor a música', () {
     Song musica(String key, String chords) =>
-        Song(id: 'x', title: 'x', key: key, sections: ChordEngine.importText('$chords' + String.fromCharCode(10) + 'Letra'));
+        Song(id: 'x', title: 'x', key: key, sections: ChordEngine.importText([chords, 'Letra'].join(String.fromCharCode(10))));
     List<String> syms(Song s) => s.sections.first.lines.first.chords.map((c) => c.sym).toList();
     test('G -1 vira F# (não Gb)', () {
       final t = ChordEngine.transposeSong(musica('G', 'G   C/E   D/F#'), -1);
