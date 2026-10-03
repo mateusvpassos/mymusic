@@ -252,7 +252,7 @@ class SettingsPage extends StatelessWidget {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Sync automático'),
-          subtitle: const Text('Envia ao salvar'),
+          subtitle: const Text('Ao salvar, busca o que mudou no Drive e envia o daqui'),
           value: sync.autoSync,
           onChanged: (v) => sync.setAutoSync(v),
         ),
