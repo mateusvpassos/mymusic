@@ -11,6 +11,7 @@ import '../core/image_export.dart';
 import '../core/pdf_export.dart';
 import '../core/pedal.dart';
 import '../data/store.dart';
+import '../live/live_page.dart';
 import '../live/live_session.dart';
 import '../models/song.dart';
 import 'song_edit_page.dart';
@@ -34,7 +35,8 @@ class SongViewPage extends StatefulWidget {
   static int openCount = 0;
 }
 
-class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderStateMixin {
+class _SongViewPageState extends State<SongViewPage>
+    with SingleTickerProviderStateMixin {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   late String _songId;
@@ -56,7 +58,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
 
   // navegação: setlist (se veio de um repertório) OU toda a biblioteca
   List<String> get _list =>
-      widget.setlistSongIds ?? context.read<AppState>().songs.map((s) => s.id).toList();
+      widget.setlistSongIds ??
+      context.read<AppState>().songs.map((s) => s.id).toList();
   int get _idx => _list.indexOf(_songId);
   bool get _hasNav => _list.length > 1;
 
@@ -73,7 +76,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     _scroll.addListener(_onScrollChanged);
     // seguindo e abrindo a mesma música de quem conduz: já cai no tom dele
     final n = _live.lastNav;
-    if (_live.following && n != null && n.songId == _songId) _transpose = n.transpose;
+    if (_live.following && n != null && n.songId == _songId) {
+      _transpose = n.transpose;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focus.requestFocus();
       if (_live.conducting) {
@@ -91,7 +96,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     final st = context.read<AppState>();
     final s = st.songById(_songId);
     if (s == null) return;
-    final sl = widget.setlistId == null ? null : st.setlistById(widget.setlistId!);
+    final sl = widget.setlistId == null
+        ? null
+        : st.setlistById(widget.setlistId!);
     _live.publishNav(s, setlist: sl, transpose: _transpose);
   }
 
@@ -99,7 +106,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   // no fim): aparelhos de tamanho e fonte diferentes caem no mesmo trecho
   double _contentH() {
     final p = _scroll.position;
-    return p.maxScrollExtent + p.viewportDimension - MediaQuery.of(context).size.height * 0.6;
+    return p.maxScrollExtent +
+        p.viewportDimension -
+        MediaQuery.of(context).size.height * 0.6;
   }
 
   // manda no máximo a cada 120ms, mas sempre a última posição
@@ -120,14 +129,24 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
 
   void _sendScroll() {
     final h = _contentH();
-    _live.publishScroll(_songId, h <= 0 ? 0 : (_scroll.offset / h).clamp(0.0, 1.0));
+    _live.publishScroll(
+      _songId,
+      h <= 0 ? 0 : (_scroll.offset / h).clamp(0.0, 1.0),
+    );
   }
 
   void _onRemoteScroll(LiveScroll r) {
     if (r.songId != _songId || !_scroll.hasClients) return;
-    final alvo = (r.frac * _contentH()).clamp(0.0, _scroll.position.maxScrollExtent);
+    final alvo = (r.frac * _contentH()).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
     if ((alvo - _scroll.offset).abs() < 1) return;
-    _scroll.animateTo(alvo, duration: const Duration(milliseconds: 160), curve: Curves.linear);
+    _scroll.animateTo(
+      alvo,
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.linear,
+    );
   }
 
   // navegação que chegou enquanto havia algo por cima (editor, diagrama):
@@ -155,14 +174,18 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
     // quem conduz foi p/ outro repertório (ou p/ a biblioteca): reabre no
     // contexto certo, p/ o "próxima música" daqui bater com o de lá
     if (n.setlistId != widget.setlistId) {
-      final sl = n.setlistId == null ? null : context.read<AppState>().setlistById(n.setlistId!);
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => SongViewPage(
-          songId: n.songId,
-          setlistId: sl?.id,
-          setlistSongIds: sl == null ? null : List.of(sl.songIds),
+      final sl = n.setlistId == null
+          ? null
+          : context.read<AppState>().setlistById(n.setlistId!);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => SongViewPage(
+            songId: n.songId,
+            setlistId: sl?.id,
+            setlistSongIds: sl == null ? null : List.of(sl.songIds),
+          ),
         ),
-      ));
+      );
       return;
     }
     final i = _list.indexOf(n.songId);
@@ -178,8 +201,10 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   void _loadTranspose() {
     if (widget.setlistId == null) return;
     final st = context.read<AppState>();
-    final sl = st.setlists.firstWhere((s) => s.id == widget.setlistId,
-        orElse: () => Setlist(id: '', name: ''));
+    final sl = st.setlists.firstWhere(
+      (s) => s.id == widget.setlistId,
+      orElse: () => Setlist(id: '', name: ''),
+    );
     _transpose = sl.transpose[_songId] ?? 0;
   }
 
@@ -229,15 +254,19 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   }
 
   bool _atBottom() =>
-      _scroll.hasClients && _scroll.offset >= _scroll.position.maxScrollExtent - 4;
+      _scroll.hasClients &&
+      _scroll.offset >= _scroll.position.maxScrollExtent - 4;
   bool _atTop() => !_scroll.hasClients || _scroll.offset <= 4;
 
   void _pageBy(double frac) {
     if (!_scroll.hasClients) return;
     final target = (_scroll.offset + _scroll.position.viewportDimension * frac)
         .clamp(0.0, _scroll.position.maxScrollExtent);
-    _scroll.animateTo(target,
-        duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   void _swipe(DragEndDetails d) {
@@ -301,12 +330,20 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                 children: [
                   ChordDiagram(shape: shape, color: scheme.primary),
                   const SizedBox(height: 4),
-                  Text('forma aproximada',
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
+                  Text(
+                    'forma aproximada',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ),
                 ],
               ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
         ],
       ),
     ).then((_) => _aplicarPendente());
@@ -329,7 +366,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
       for (final l in sec.lines) {
         for (final c in l.chords) {
           // (2x), |, N.C. são marcação, não acorde p/ mostrar diagrama
-          if (ChordEngine.isChordSymbol(c.sym) && seen.add(c.sym)) out.add(c.sym);
+          if (ChordEngine.isChordSymbol(c.sym) && seen.add(c.sym)) {
+            out.add(c.sym);
+          }
         }
       }
     }
@@ -349,8 +388,10 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
         itemCount: chords.length,
         separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) => ActionChip(
-          label: Text(chords[i],
-              style: TextStyle(color: chordColor, fontWeight: FontWeight.w700)),
+          label: Text(
+            chords[i],
+            style: TextStyle(color: chordColor, fontWeight: FontWeight.w700),
+          ),
           visualDensity: VisualDensity.compact,
           onPressed: () => _showDiagram(chords[i]),
         ),
@@ -361,7 +402,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   void _setFont(double delta) {
     final st = context.read<AppState>();
     st.updateSettings(
-        (s) => s.fontScale = (s.fontScale + delta).clamp(0.7, 2.8));
+      (s) => s.fontScale = (s.fontScale + delta).clamp(0.7, 2.8),
+    );
   }
 
   void _toggleMetro(int bpm) {
@@ -375,10 +417,13 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
       SystemSound.play(SystemSoundType.click);
       HapticFeedback.lightImpact();
     }
+
     tick();
     setState(() {
       _metro = Timer.periodic(
-          Duration(milliseconds: (60000 / bpm).round()), (_) => tick());
+        Duration(milliseconds: (60000 / bpm).round()),
+        (_) => tick(),
+      );
     });
   }
 
@@ -434,8 +479,13 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(base.title,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                    Text(
+                      base.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
                     Text(
                       '${shown.key}'
                       '${base.capo > 0 ? '  •  capo ${base.capo}${_capo ? '' : ' (off)'}' : ''}'
@@ -445,18 +495,29 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                       style: TextStyle(fontSize: 12, color: scheme.primary),
                     ),
                     if (live.active)
-                      Text(
-                        live.reconnecting
-                            ? 'ao vivo: reconectando...'
-                            : live.conducting
-                                ? 'ao vivo: conduzindo (${live.others} seguindo)'
-                                : live.following
-                                    ? 'ao vivo: seguindo'
-                                    : 'ao vivo: livre',
-                        style: TextStyle(
+                      // toque abre a sessão (ex.: passar p/ "livre" sem sair da música)
+                      InkWell(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LivePage()),
+                        ),
+                        child: Text(
+                          live.reconnecting
+                              ? 'ao vivo: reconectando...'
+                              : live.conducting
+                              ? 'ao vivo: conduzindo (${live.others} seguindo)'
+                              : live.following
+                              ? 'ao vivo: seguindo'
+                              : 'ao vivo: livre',
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: live.reconnecting ? scheme.error : scheme.tertiary),
+                            decoration: TextDecoration.underline,
+                            color: live.reconnecting
+                                ? scheme.error
+                                : scheme.tertiary,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -466,24 +527,42 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                     tooltip: 'Exportar',
                     onSelected: (v) {
                       final strong = _strongColor();
-                      final prefix =
-                          widget.setlistId != null ? '${_idx + 1}. ' : '';
+                      final prefix = widget.setlistId != null
+                          ? '${_idx + 1}. '
+                          : '';
                       if (v == 'pdf') {
-                        PdfExport.printOrShare(shown,
-                            colorArgb: strong.toARGB32(), namePrefix: prefix);
+                        PdfExport.printOrShare(
+                          shown,
+                          colorArgb: strong.toARGB32(),
+                          namePrefix: prefix,
+                        );
                       }
                       if (v == 'img') {
-                        ImageExport.shareImage(shown, chordColor: strong, namePrefix: prefix);
+                        ImageExport.shareImage(
+                          shown,
+                          chordColor: strong,
+                          namePrefix: prefix,
+                        );
                       }
                       if (v == 'docx') {
-                        DocxExport.shareSong(shown,
-                            chordColor: strong, namePrefix: prefix);
+                        DocxExport.shareSong(
+                          shown,
+                          chordColor: strong,
+                          namePrefix: prefix,
+                        );
                       }
-                      st.logEvent('exportou', 'musica', base.title,
-                          details: ['Formato: ${v.toUpperCase()}']);
+                      st.logEvent(
+                        'exportou',
+                        'musica',
+                        base.title,
+                        details: ['Formato: ${v.toUpperCase()}'],
+                      );
                     },
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'pdf', child: Text('PDF / Imprimir')),
+                      PopupMenuItem(
+                        value: 'pdf',
+                        child: Text('PDF / Imprimir'),
+                      ),
                       PopupMenuItem(value: 'docx', child: Text('Word (.docx)')),
                       PopupMenuItem(value: 'img', child: Text('Imagem (PNG)')),
                     ],
@@ -496,9 +575,12 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Editar',
-                    onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => SongEditPage(songId: base.id)))
-                        .then((_) => _aplicarPendente()),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SongEditPage(songId: base.id),
+                      ),
+                    ).then((_) => _aplicarPendente()),
                   ),
                 ],
               ),
@@ -510,98 +592,125 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
               Container(
                 width: double.infinity,
                 color: scheme.secondaryContainer,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.sticky_note_2_outlined,
-                        size: 16, color: scheme.onSecondaryContainer),
+                    Icon(
+                      Icons.sticky_note_2_outlined,
+                      size: 16,
+                      color: scheme.onSecondaryContainer,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(base.notes,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontStyle: FontStyle.italic,
-                              color: scheme.onSecondaryContainer)),
+                      child: Text(
+                        base.notes,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                          color: scheme.onSecondaryContainer,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             Expanded(
               child: Stack(
-          children: [
-            GestureDetector(
-              onHorizontalDragEnd: _swipe,
-              child: SingleChildScrollView(
-                controller: _scroll,
-                padding: EdgeInsets.fromLTRB(
-                    16, _full ? 28 : 8, 16, MediaQuery.of(context).size.height * 0.6),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  transitionBuilder: (child, anim) {
-                    final incoming = child.key == ValueKey(_songId);
-                    final begin = Offset(_dir * (incoming ? 1.0 : -1.0), 0);
-                    return SlideTransition(
-                      position: Tween(begin: begin, end: Offset.zero)
-                          .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-                      child: child,
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey(_songId),
-                    child: ChordChart(
-                      song: shown,
-                      fontSize: fontSize,
-                      chordColor: chordColor,
-                      onTapChord: _showDiagram,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (_autoScroll)
-              Positioned(
-                top: MediaQuery.of(context).size.height * 0.30,
-                left: 0,
-                right: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    height: fontSize * 2.6,
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.10),
-                      border: Border(
-                        top: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
-                        bottom: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
+                children: [
+                  GestureDetector(
+                    onHorizontalDragEnd: _swipe,
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        _full ? 28 : 8,
+                        16,
+                        MediaQuery.of(context).size.height * 0.6,
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        transitionBuilder: (child, anim) {
+                          final incoming = child.key == ValueKey(_songId);
+                          final begin = Offset(
+                            _dir * (incoming ? 1.0 : -1.0),
+                            0,
+                          );
+                          return SlideTransition(
+                            position: Tween(begin: begin, end: Offset.zero)
+                                .animate(
+                                  CurvedAnimation(
+                                    parent: anim,
+                                    curve: Curves.easeOutCubic,
+                                  ),
+                                ),
+                            child: child,
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey(_songId),
+                          child: ChordChart(
+                            song: shown,
+                            fontSize: fontSize,
+                            chordColor: chordColor,
+                            onTapChord: _showDiagram,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            if (_full)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: SafeArea(
-                  child: Row(children: [
-                    IconButton.filledTonal(
-                      icon: const Icon(Icons.text_decrease),
-                      tooltip: 'Fonte -',
-                      onPressed: () => _setFont(-0.1),
+                  if (_autoScroll)
+                    Positioned(
+                      top: MediaQuery.of(context).size.height * 0.30,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          height: fontSize * 2.6,
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(alpha: 0.10),
+                            border: Border(
+                              top: BorderSide(
+                                color: scheme.primary.withValues(alpha: 0.35),
+                              ),
+                              bottom: BorderSide(
+                                color: scheme.primary.withValues(alpha: 0.35),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 6),
-                    IconButton.filledTonal(
-                      icon: const Icon(Icons.text_increase),
-                      tooltip: 'Fonte +',
-                      onPressed: () => _setFont(0.1),
+                  if (_full)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: SafeArea(
+                        child: Row(
+                          children: [
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.text_decrease),
+                              tooltip: 'Fonte -',
+                              onPressed: () => _setFont(-0.1),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.text_increase),
+                              tooltip: 'Fonte +',
+                              onPressed: () => _setFont(0.1),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.fullscreen_exit),
+                              tooltip: 'Sair da tela cheia',
+                              onPressed: _toggleFull,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 6),
-                    IconButton.filledTonal(
-                      icon: const Icon(Icons.fullscreen_exit),
-                      tooltip: 'Sair da tela cheia',
-                      onPressed: _toggleFull,
-                    ),
-                  ]),
-                ),
-              ),
                 ],
               ),
             ),
@@ -626,8 +735,11 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
             children: [
               const SizedBox(width: 4),
               if (_hasNav)
-                _tb(Icons.skip_previous, 'Música anterior',
-                    _idx > 0 ? () => _gotoSong(_idx - 1) : null),
+                _tb(
+                  Icons.skip_previous,
+                  'Música anterior',
+                  _idx > 0 ? () => _gotoSong(_idx - 1) : null,
+                ),
               _tb(Icons.remove, 'Tom -', () => _setTranspose(_transpose - 1)),
               _label('Tom'),
               _tb(Icons.add, 'Tom +', () => _setTranspose(_transpose + 1)),
@@ -648,7 +760,9 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
                 IconButton(
                   isSelected: _capo,
                   icon: Icon(_capo ? Icons.album : Icons.album_outlined),
-                  tooltip: _capo ? 'Acordes com capo (ligado)' : 'Acordes com capo (desligado)',
+                  tooltip: _capo
+                      ? 'Acordes com capo (ligado)'
+                      : 'Acordes com capo (desligado)',
                   onPressed: () => setState(() => _capo = !_capo),
                 ),
               IconButton.filledTonal(
@@ -660,14 +774,19 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
               if (base.bpm > 0)
                 IconButton(
                   isSelected: _metro != null,
-                  icon: Icon(_metro != null ? Icons.av_timer : Icons.av_timer_outlined),
+                  icon: Icon(
+                    _metro != null ? Icons.av_timer : Icons.av_timer_outlined,
+                  ),
                   tooltip: 'Metrônomo ${base.bpm}',
                   onPressed: () => _toggleMetro(base.bpm),
                 ),
               _tb(Icons.fullscreen, 'Tela cheia', _toggleFull),
               if (_hasNav)
-                _tb(Icons.skip_next, 'Próxima música',
-                    _idx < _list.length - 1 ? () => _gotoSong(_idx + 1) : null),
+                _tb(
+                  Icons.skip_next,
+                  'Próxima música',
+                  _idx < _list.length - 1 ? () => _gotoSong(_idx + 1) : null,
+                ),
               const SizedBox(width: 4),
             ],
           ),
@@ -679,6 +798,8 @@ class _SongViewPageState extends State<SongViewPage> with SingleTickerProviderSt
   Widget _tb(IconData i, String tip, VoidCallback? onTap) =>
       IconButton(icon: Icon(i), tooltip: tip, onPressed: onTap);
 
-  Widget _label(String t) => Text(t,
-      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13));
+  Widget _label(String t) => Text(
+    t,
+    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+  );
 }

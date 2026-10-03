@@ -23,17 +23,26 @@ App nativo Android feito em **Flutter**, focado em ser **bonito, rápido e fáci
 - **A– / A+** para ajustar a fonte na hora, sem abrir menus
 - **Refrão destacado** e **diagramas de acorde** (toque no acorde para ver a pegada)
 
+### Ao vivo (vários aparelhos)
+- **Sessão pela rede Wi-Fi** (pode ser o roteador do celular): um aparelho cria, os outros acham na lista ou digitam o IP
+- Quem **conduz** troca de música, muda o tom e rola a tela → quem **segue** acompanha na hora (a música vai junto, mesmo que o outro não tenha)
+- **Um condutor por vez** — assumir rebaixa o anterior, com aviso
+- Editar música/repertório em qualquer aparelho atualiza os outros; exclusão não se propaga
+- Reconecta sozinho se o Wi-Fi cair; tela não apaga durante a sessão
+
 ### Organização
-- **Biblioteca** com busca, **tags/categorias** e filtro
+- **Biblioteca** com busca **sem acento** e **por trecho da letra**, **tags/categorias** e filtro
 - **Repertórios** (setlists) reordenáveis, com **tom salvo por música** e **duplicar**
 - Editor **simples**: arraste acordes para a posição certa, ou edite como texto
-- **Importar cifra** colada no formato "acorde acima da letra" (Cifra Club) ou ChordPro
+- **Importar cifra** colada no formato "acorde acima da letra" (Cifra Club, inclusive o bug de copiar/colar do site), ChordPro (`{title}`, `{c:}`, `{soc}`) ou com `Tom:`/`Capo` no texto
+- Entende `D7/9`, `Bø`, `B7(4/9)`, marcações `(2x)`, `|`, `N.C.` e seções por extenso (`Refrão:`, `1ª Parte`, `Intro: C G`)
+- **Histórico** de tudo o que mudou (o quê, quando, de qual aparelho)
 - **Desfazer** (undo) na edição
 
 ### Backup & sync
-- **Google Drive** (pasta privada `appDataFolder`) com sync automático e merge inteligente (mais recente vence)
+- **Google Drive** (pasta privada `appDataFolder`) com sync automático (baixa, mescla e sobe; mais recente vence; **exclusão se propaga**)
 - **Exportar / importar JSON** (backup completo)
-- **Exportar PDF / imprimir** a cifra
+- **PDF** (1 ou 2 colunas, encaixa na página), **Word (.docx)**, **imagem** e **TXT só letras** — da música ou do repertório inteiro no tom do repertório
 
 ### Aparência
 - Tema claro/escuro, **8 cores** à escolha, tamanho de fonte ajustável
@@ -92,7 +101,11 @@ lib/
 │   ├── chord_engine.dart   # parser ChordPro + acorde-sobre-letra, transpose, modelo (Dart puro, testado)
 │   ├── chord_shapes.dart   # geração de diagramas de acorde (formas móveis E/A)
 │   ├── pedal.dart          # mapeamento de teclas do pedal
-│   └── pdf_export.dart     # geração de PDF / impressão
+│   ├── chart_layout.dart   # encaixe em colunas/fonte (compartilhado PDF e DOCX)
+│   ├── pdf_export.dart     # PDF / impressão
+│   ├── docx_export.dart    # Word
+│   └── search.dart         # busca sem acento + trecho da letra
+├── live/                   # sessão ao vivo: hub WebSocket + descoberta UDP + tela
 ├── data/store.dart         # estado global (ChangeNotifier) + persistência JSON
 ├── models/song.dart        # Song · Section · Line · Chord · Setlist · Settings
 ├── sync/drive_sync.dart    # login Google + sync Drive (appDataFolder)
@@ -105,11 +118,8 @@ O **núcleo de cifras** (`core/`) é Dart puro, sem dependência de UI — fáci
 
 ## 🗺️ Roadmap
 
-- [ ] Capo aplicado de verdade na exibição dos acordes
 - [ ] Velocidade de auto-scroll salva por música
-- [ ] Realce da linha atual durante o auto-scroll
-- [ ] Barra com todos os acordes da música + diagramas no topo
-- [ ] BPM + metrônomo (tap tempo) → auto-scroll por BPM
+- [ ] Opção de seguir sem pegar o tom de quem conduz (ex.: teclado sem capo)
 
 ---
 
