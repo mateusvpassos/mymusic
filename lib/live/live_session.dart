@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../core/chord_engine.dart';
 import '../data/store.dart';
 import '../models/song.dart';
+import 'live_codigo.dart';
 
 /// Sessão ao vivo pela rede local (Wi-Fi ou hotspot do celular).
 ///
@@ -75,6 +76,7 @@ class LiveSession extends ChangeNotifier {
   String? hostName; // nome de quem criou a sessão (visto pelo convidado)
   String? hostAddress; // ip:porta conectado (convidado)
   int? serverPort; // porta aberta (hub)
+  String? codigo; // código de 4 dígitos p/ entrar sem digitar IP (hub)
   final Map<String, LivePeer> peers = {}; // inclui este aparelho
 
   /// Último estado de navegação recebido — quem abre a tela da música
@@ -150,6 +152,19 @@ class LiveSession extends ChangeNotifier {
     _server!.listen(_onHttp, onError: (_) {});
     await _startBeacon();
     notifyListeners();
+    // código p/ quem entra (web inclusive) não precisar digitar IP; sem
+    // internet fica só o IP
+    final porta = serverPort!;
+    localAddresses()
+        .then((ips) => LiveCodigo.publicar(ips: ips, porta: porta, host: myName))
+        .then((c) {
+      if (role != LiveRole.host || serverPort != porta) {
+        if (c != null) LiveCodigo.encerrar();
+        return;
+      }
+      codigo = c;
+      notifyListeners();
+    });
     return true;
   }
 
@@ -315,6 +330,9 @@ class LiveSession extends ChangeNotifier {
 
   /// Entra na sessão de [address] ("192.168.0.10" ou "192.168.0.10:47800").
   Future<bool> join(String address, {int? port}) async {
+    if (RegExp(r'^\d{4}$').hasMatch(address.trim())) {
+      return _joinCodigo(address.trim());
+    }
     await leave();
     _fixaNome();
     error = null;
@@ -341,6 +359,24 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
     }
     return ok;
+  }
+
+  /// Entra pelo código: busca os IPs de quem criou e tenta cada um.
+  Future<bool> _joinCodigo(String c) async {
+    error = null;
+    notifyListeners();
+    final s = await LiveCodigo.buscar(c);
+    if (s == null) {
+      error = 'Código $c não encontrado — a sessão ainda está aberta?';
+      notifyListeners();
+      return false;
+    }
+    for (final ip in s.ips) {
+      if (await join(ip, port: s.porta)) return true;
+    }
+    error = 'Achei a sessão $c, mas não conectou — os aparelhos estão no mesmo Wi-Fi?';
+    notifyListeners();
+    return false;
   }
 
   bool reconnecting = false;
@@ -422,6 +458,10 @@ class LiveSession extends ChangeNotifier {
       } catch (_) {}
     }
     _clients.clear();
+    if (codigo != null) {
+      codigo = null;
+      LiveCodigo.encerrar();
+    }
     await _server?.close(force: true);
     _server = null;
     serverPort = null;

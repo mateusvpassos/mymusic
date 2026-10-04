@@ -88,7 +88,7 @@ class _LivePageState extends State<LivePage> {
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
           icon: const Icon(Icons.keyboard),
-          label: const Text('Digitar endereço'),
+          label: const Text('Digitar código ou endereço'),
           onPressed: () => _digitar(live),
         ),
       ),
@@ -109,12 +109,15 @@ class _LivePageState extends State<LivePage> {
     final addr = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Endereço da sessão'),
+        title: const Text('Código da sessão'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(hintText: 'ex.: 192.168.0.12'),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            hintText: 'ex.: 4821',
+            helperText: 'O código aparece em quem criou a sessão (ou o IP)',
+          ),
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
@@ -150,8 +153,18 @@ class _LivePageState extends State<LivePage> {
                 Text(status,
                     style: TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 16, color: scheme.onPrimaryContainer)),
+                if (hub && live.codigo != null)
+                  Text('Código: ${live.codigo}',
+                      style: TextStyle(
+                          color: scheme.onPrimaryContainer,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 4)),
                 if (hub && _ips.isNotEmpty)
-                  Text('Endereço p/ digitar: ${_ips.join('  ou  ')}',
+                  Text(
+                      live.codigo != null
+                          ? 'ou endereço: ${_ips.join('  ou  ')}'
+                          : 'Endereço p/ digitar: ${_ips.join('  ou  ')}',
                       style: TextStyle(color: scheme.onPrimaryContainer)),
               ]),
             ),
@@ -258,7 +271,8 @@ class _LivePageState extends State<LivePage> {
   Widget _ajuda(BuildContext context) => Text(
         'Todos precisam estar na mesma rede Wi-Fi (pode ser o roteador do celular). '
         'Se a sessão não aparecer na lista, a rede bloqueia a busca: use "Digitar '
-        'endereço" com o número que aparece no aparelho que criou a sessão.\n\n'
+        'código" com o código que aparece no aparelho que criou a sessão (no '
+        'computador, MyMusic web › Ao vivo, também é pelo código).\n\n'
         'Editar uma música ou repertório em qualquer aparelho atualiza os outros. '
         'Excluir só apaga no próprio aparelho.',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),

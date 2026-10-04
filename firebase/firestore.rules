@@ -7,6 +7,7 @@ rules_version = '2';
 // acervoSugestoes/{id}             sugestão p/ música do acervo
 // confianca/{dono}                 quem mexe em TODO o acervo de {dono}
 // pessoas/{email}                  nome de cada usuário
+// sessoes/{codigo}                 sessão ao vivo: IPs de quem criou (abre por código)
 // grupos/{g}                       nome, dono (e-mail), membros [e-mails]
 // grupos/{g}/pessoas/{email}       nome de quem é do grupo
 // grupos/{g}/confianca/{dono}      editores [e-mails] que mexem em TODAS as músicas/repertórios de {dono}
@@ -98,6 +99,20 @@ service cloud.firestore {
         || (request.resource.data.status == 'cancelada' && resource.data.por == eu()
           && soMudou(['status', 'decididoEm'])));
       allow delete: if false;
+    }
+
+    // ---- sessão ao vivo: código de 4 dígitos -> IPs do aparelho que criou ----
+    // Só abre por código (sem listar). Código abandonado (>10 min sem sinal)
+    // pode ser reaproveitado por outra pessoa.
+    match /sessoes/{codigo} {
+      allow get: if eu() != '';
+      allow list: if false;
+      allow create: if eu() != '' && codigo.matches('[0-9]{4}')
+        && request.resource.data.dono == eu();
+      allow update: if eu() != '' && request.resource.data.dono == eu()
+        && (resource.data.dono == eu()
+            || resource.data.vivoEm < request.time - duration.value(10, 'm'));
+      allow delete: if eu() == resource.data.dono;
     }
 
     match /grupos/{g} {

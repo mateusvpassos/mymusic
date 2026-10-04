@@ -158,3 +158,20 @@ test('acervo: revisão só junto com gravação permitida', async () => {
   await assertSucceeds(b.commit());
   await assertFails(setDoc(doc(db(BIA), 'acervo/a6/versoes/r3'), { n: 3, por: BIA, song: {} }));
 });
+
+test('sessão ao vivo: abre por código, não lista, só o dono mexe', async () => {
+  const { Timestamp, serverTimestamp } = await import('firebase/firestore');
+  const s = { ips: ['192.168.0.10'], porta: 47800, host: 'Tablet', dono: DONO, vivoEm: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(db(DONO), 'sessoes/1234'), s));
+  await assertFails(setDoc(doc(db(DONO), 'sessoes/12a4'), s));
+  await assertFails(setDoc(doc(db(ANA), 'sessoes/5555'), s)); // em nome de outro
+  await assertSucceeds(getDoc(doc(db(FORA), 'sessoes/1234')));
+  await assertFails(getDocs(collection(db(FORA), 'sessoes')));
+  await assertFails(setDoc(doc(db(ANA), 'sessoes/1234'), { ...s, dono: ANA })); // código vivo
+  await assertFails(deleteDoc(doc(db(ANA), 'sessoes/1234')));
+  await assertSucceeds(deleteDoc(doc(db(DONO), 'sessoes/1234')));
+  // abandonado há mais de 10 min: outra pessoa reaproveita
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'sessoes/4321'),
+    { ...s, vivoEm: Timestamp.fromMillis(Date.now() - 11 * 60000) }));
+  await assertSucceeds(setDoc(doc(db(ANA), 'sessoes/4321'), { ...s, dono: ANA }));
+});
