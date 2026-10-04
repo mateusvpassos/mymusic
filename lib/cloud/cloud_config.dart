@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 
 /// Liga o Firebase: o projeto de verdade (firebase_options.dart) ou, nos
@@ -14,14 +15,22 @@ class CloudConfig {
   static const webClientId =
       '333951307134-ttuhelsl1nfrbrfsd21i3a783falt8s9.apps.googleusercontent.com';
 
-  static FirebaseOptions? get options => emulador
-      ? const FirebaseOptions(
-          apiKey: 'demo-key',
-          appId: '1:1:android:1',
-          messagingSenderId: '1',
-          projectId: 'demo-mymusic',
-        )
-      : firebaseAndroid;
+  static FirebaseOptions? get options {
+    if (emulador) {
+      return const FirebaseOptions(
+        apiKey: 'demo-key',
+        appId: '1:1:android:1',
+        messagingSenderId: '1',
+        projectId: 'demo-mymusic',
+      );
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return firebaseIos;
+      default:
+        return firebaseAndroid;
+    }
+  }
 
   static bool ligado = false;
 

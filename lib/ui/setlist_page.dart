@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../cloud/acervo.dart';
 import '../cloud/cloud_state.dart';
 import '../cloud/permissions_sheet.dart';
 import '../core/chord_engine.dart';
@@ -385,7 +386,14 @@ class SetlistPage extends StatelessWidget {
             final scheme = Theme.of(context).colorScheme;
             bool especifica(Song s) => s.tempos.any(tempos.contains);
             bool doTempo(Song s) => s.tempos.isEmpty || especifica(s);
-            var achadas = SongSearch.run(st.songs, busca);
+            // minhas músicas + as do acervo que ainda não tenho (marcar puxa a cópia)
+            final ac = context.read<AcervoState>();
+            final doAcervo = [
+              for (final e in ac.obras.entries)
+                if (ac.copiaDaObra(e.key) == null) e.value.first,
+            ];
+            bool daBiblioteca(Song s) => st.songById(s.id) != null;
+            var achadas = SongSearch.run([...st.songs, ...doAcervo], busca);
             if (momento != null) {
               achadas = achadas
                   .where((h) => h.song.momentos.contains(momento))
@@ -482,9 +490,16 @@ class SetlistPage extends StatelessWidget {
                       ),
                       secondary: especifica(h.song)
                           ? Icon(Icons.church, size: 18, color: scheme.primary)
+                          : !daBiblioteca(h.song)
+                          ? Tooltip(
+                              message: 'Do acervo geral — entra nas suas músicas ao marcar',
+                              child: Icon(Icons.public, size: 18, color: scheme.outline),
+                            )
                           : const SizedBox(width: 18), // alinha os títulos
                       onChanged: (v) {
-                        final id = h.song.id;
+                        final id = daBiblioteca(h.song) || v != true
+                            ? h.song.id
+                            : ac.puxar(h.song).id;
                         if (v == true) {
                           if (!sl.songIds.contains(id)) sl.songIds.add(id);
                           // momento: o do filtro, ou o único da música

@@ -13,3 +13,7 @@ const FirebaseOptions? firebaseAndroid = FirebaseOptions(
   projectId: 'cifras-779b6',
   storageBucket: 'cifras-779b6.firebasestorage.app',
 );
+
+/// null até registrar o app iOS no mesmo projeto Firebase
+/// (bundle `com.mvini.mymusic`) e colar aqui o bloco do console.
+const FirebaseOptions? firebaseIos = null;

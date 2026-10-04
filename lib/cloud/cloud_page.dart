@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'acervo.dart';
 import 'cloud_config.dart';
 import 'cloud_state.dart';
 
-/// Grupo compartilhado: entrar, convidar pessoas, quem pode editar o quê.
+/// Conta e compartilhamento: quem você é, de quem é a biblioteca em uso,
+/// quem tem acesso a ela e quem pode editar direto.
 class CloudPage extends StatefulWidget {
   const CloudPage({super.key});
   @override
@@ -29,7 +29,7 @@ class _CloudPageState extends State<CloudPage> {
     final c = context.watch<CloudState>();
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Grupo compartilhado')),
+      appBar: AppBar(title: const Text('Conta e compartilhamento')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -38,12 +38,7 @@ class _CloudPageState extends State<CloudPage> {
               context,
               icon: Icons.cloud_off,
               titulo: 'Nuvem ainda não configurada',
-              children: const [
-                Text(
-                  'Falta criar o projeto no console do Firebase. Enquanto isso '
-                  'o app continua sincronizando pelo Google Drive.',
-                ),
-              ],
+              children: const [Text('Falta configurar o Firebase.')],
             )
           else if (c.user == null)
             _entrar(context, c)
@@ -54,11 +49,18 @@ class _CloudPageState extends State<CloudPage> {
             else ...[
               _grupo(context, c),
               _pessoas(context, c),
-              _confianca(context, c),
+              if (c.souDonoDoGrupo) _confianca(context, c),
               _envio(context, c),
+              _acervo(context),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _criarGrupo(context, c),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Criar outra biblioteca separada (ex.: de um coral)'),
+                ),
+              ),
             ],
-            // acervo geral não depende de grupo
-            _acervo(context),
           ],
           if (c.erro != null)
             Padding(
@@ -115,10 +117,7 @@ class _CloudPageState extends State<CloudPage> {
       icon: Icons.login,
       titulo: 'Entrar',
       children: [
-        const Text(
-          'Com a conta Google, as músicas ficam num grupo compartilhado: '
-          'cada um vê tudo, quem criou é o dono e os outros mandam sugestões.',
-        ),
+        const Text('Entre com a conta Google p/ ver o acervo e as suas músicas.'),
         const SizedBox(height: 12),
         if (CloudConfig.emulador) ...[
           TextField(
@@ -147,41 +146,43 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   Widget _conta(BuildContext context, CloudState c) {
-    return _card(
-      context,
-      icon: Icons.account_circle,
-      titulo: c.nome,
-      trailing: TextButton(onPressed: c.sair, child: const Text('Sair')),
-      children: [Text(c.eu)],
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        leading: CircleAvatar(
+          radius: 22,
+          child: Text(c.nome.isEmpty ? '?' : c.nome[0].toUpperCase(),
+              style: const TextStyle(fontSize: 20)),
+        ),
+        title: Text(c.nome, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(c.eu),
+        trailing: TextButton(onPressed: c.sair, child: const Text('Sair')),
+      ),
     );
   }
 
   Widget _semGrupo(BuildContext context, CloudState c) {
+    // a biblioteca pessoal é criada sozinha; aqui só se tiver várias p/ escolher
+    if (c.grupos.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('Preparando a sua biblioteca...'),
+      );
+    }
     return _card(
       context,
-      icon: Icons.groups_outlined,
-      titulo: 'Nenhum grupo ainda',
+      icon: Icons.library_music_outlined,
+      titulo: 'Qual biblioteca abrir?',
       children: [
-        if (c.grupos.isNotEmpty) ...[
-          for (final g in c.grupos)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.group),
-              title: Text(g.nome),
-              subtitle: Text('${g.membros.length} pessoa(s)'),
-              onTap: () => c.escolherGrupo(g),
-            ),
-        ] else
-          Text(
-            'Para entrar no grupo de alguém, peça para te convidar com o '
-            'e-mail ${c.eu}. Ou crie o seu grupo (banda, coral, ministério...):',
+        for (final g in c.grupos)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.library_music),
+            title: Text(g.dono == c.eu ? 'Minha biblioteca' : g.nome),
+            subtitle: Text('${g.membros.length} pessoa(s)'),
+            onTap: () => c.escolherGrupo(g),
           ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: () => _criarGrupo(context, c),
-          icon: const Icon(Icons.add),
-          label: const Text('Criar grupo'),
-        ),
       ],
     );
   }
@@ -191,12 +192,12 @@ class _CloudPageState extends State<CloudPage> {
     final nome = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Novo grupo'),
+        title: const Text('Nova biblioteca'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'Nome do grupo (ex.: banda, coral, ministério)',
+            hintText: 'Nome (ex.: Coral da paróquia)',
           ),
         ),
         actions: [
@@ -216,35 +217,54 @@ class _CloudPageState extends State<CloudPage> {
 
   Widget _grupo(BuildContext context, CloudState c) {
     final g = c.grupo!;
+    final cinza = Theme.of(context).colorScheme.onSurfaceVariant;
     return _card(
       context,
-      icon: Icons.groups,
-      titulo: g.nome,
-      trailing: c.grupos.length > 1
-          ? PopupMenuButton<Grupo>(
-              tooltip: 'Trocar de grupo',
-              icon: const Icon(Icons.swap_horiz),
-              onSelected: c.escolherGrupo,
-              itemBuilder: (_) => [
-                for (final x in c.grupos)
-                  PopupMenuItem(value: x, child: Text(x.nome)),
-              ],
-            )
-          : null,
+      icon: Icons.library_music_outlined,
+      titulo: c.souDonoDoGrupo ? 'Sua biblioteca' : 'Biblioteca de ${c.nomeDe(g.dono)}',
       children: [
         Text(
           c.souDonoDoGrupo
-              ? 'Você é o responsável pelo grupo.'
-              : 'Responsável: ${c.nomeDe(g.dono)}',
+              ? 'As suas músicas e os seus repertórios ficam salvos aqui, na nuvem. '
+                    'Quem você convidar vê tudo, toca junto e pode sugerir mudanças '
+                    '— você aceita ou não (ícone de caixa de entrada na tela inicial).'
+              : '${c.nomeDe(g.dono)} te convidou. Você vê e toca tudo; o que for '
+                    'dos outros você muda mandando sugestão, a não ser que te '
+                    'liberem p/ editar direto.',
         ),
-        const SizedBox(height: 4),
-        Text(
-          c.carregou
-              ? 'Sincronizado — as mudanças chegam na hora.'
-              : 'Carregando...',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        if (c.grupos.length > 1) ...[
+          const SizedBox(height: 10),
+          Text('Você tem acesso a ${c.grupos.length} bibliotecas:',
+              style: TextStyle(color: cinza)),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final x in c.grupos)
+                ChoiceChip(
+                  label: Text(x.dono == c.eu ? 'Minha' : x.nome),
+                  selected: x.id == g.id,
+                  onSelected: (_) => c.escolherGrupo(x),
+                ),
+            ],
           ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Icon(c.carregou ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined,
+                size: 18, color: cinza),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                c.carregou
+                    ? 'Tudo salvo — as mudanças chegam na hora p/ todos.'
+                    : 'Carregando...',
+                style: TextStyle(color: cinza, fontSize: 13),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -255,7 +275,7 @@ class _CloudPageState extends State<CloudPage> {
     return _card(
       context,
       icon: Icons.people_outline,
-      titulo: 'Pessoas (${g.membros.length})',
+      titulo: 'Quem tem acesso (${g.membros.length})',
       children: [
         for (final m in g.membros)
           ListTile(
@@ -267,13 +287,13 @@ class _CloudPageState extends State<CloudPage> {
                 c.nomeDe(m).isEmpty ? '?' : c.nomeDe(m)[0].toUpperCase(),
               ),
             ),
-            title: Text(c.nomeDe(m)),
-            subtitle: Text(m == g.dono ? '$m · responsável' : m),
+            title: Text('${c.nomeDe(m)}${m == c.eu ? ' (você)' : ''}'),
+            subtitle: Text(m == g.dono ? '$m · dono da biblioteca' : m),
             trailing: c.souDonoDoGrupo && m != g.dono
                 ? IconButton(
                     icon: const Icon(Icons.person_remove_outlined),
-                    tooltip: 'Tirar do grupo',
-                    onPressed: () => c.remover(m),
+                    tooltip: 'Tirar o acesso',
+                    onPressed: () => _tirar(context, c, m),
                   )
                 : null,
           ),
@@ -286,14 +306,15 @@ class _CloudPageState extends State<CloudPage> {
                   controller: _convite,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    hintText: 'E-mail Google de quem convidar',
+                    hintText: 'E-mail Google da pessoa',
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () {
-                  c.convidar(_convite.text);
+                  final e = _convite.text.trim().toLowerCase();
+                  if (e.isNotEmpty) c.convidar(e);
                   _convite.clear();
                 },
                 child: const Text('Convidar'),
@@ -302,7 +323,7 @@ class _CloudPageState extends State<CloudPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'A pessoa entra no app com esse e-mail e já cai no grupo.',
+            'A pessoa instala o app, entra com esse e-mail e já vê a sua biblioteca.',
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -313,18 +334,32 @@ class _CloudPageState extends State<CloudPage> {
     );
   }
 
+  Future<void> _tirar(BuildContext context, CloudState c, String m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Tirar o acesso?'),
+        content: Text('${c.nomeDe(m)} deixa de ver a sua biblioteca.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Tirar')),
+        ],
+      ),
+    );
+    if (ok == true) c.remover(m);
+  }
+
   Widget _confianca(BuildContext context, CloudState c) {
     final outros = c.grupo!.membros.where((m) => m != c.eu).toList();
     final atuais = c.confianca[c.eu] ?? const <String>[];
     return _card(
       context,
-      icon: Icons.verified_user_outlined,
-      titulo: 'Quem edita o que é seu sem pedir',
+      icon: Icons.edit_note,
+      titulo: 'Quem pode editar direto',
       children: [
         const Text(
-          'Marcados podem mudar TODAS as suas músicas e repertórios direto. '
-          'Os outros mandam sugestão e você aceita ou não. Dá p/ liberar '
-          'também música por música (tela da música › Quem pode editar).',
+          'Normalmente só você muda as suas músicas; os outros mandam sugestão. '
+          'Marque quem pode mudar TUDO direto, sem pedir:',
         ),
         const SizedBox(height: 8),
         if (outros.isEmpty)
@@ -336,6 +371,7 @@ class _CloudPageState extends State<CloudPage> {
             children: [
               for (final m in outros)
                 FilterChip(
+                  avatar: atuais.contains(m) ? null : const Icon(Icons.add, size: 16),
                   label: Text(c.nomeDe(m)),
                   selected: atuais.contains(m),
                   onSelected: (v) => c.setConfianca(
@@ -344,52 +380,28 @@ class _CloudPageState extends State<CloudPage> {
                 ),
             ],
           ),
+        const SizedBox(height: 8),
+        Text(
+          'Dá p/ liberar também só uma música ou um repertório (na tela dele › '
+          'Dono e quem pode editar).',
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       ],
     );
   }
 
   Widget _acervo(BuildContext context) {
-    final a = context.watch<AcervoState>();
-    if (!a.carregou) return const SizedBox.shrink();
-    final falta = a.naoPublicadas;
     return _card(
       context,
       icon: Icons.public,
       titulo: 'Acervo geral',
-      children: [
+      children: const [
         Text(
-          falta.isEmpty
-              ? 'Todas as suas músicas estão no acervo. ${a.obras.length} músicas no acervo ao todo.'
-              : '${falta.length} música(s) suas ainda não estão no acervo geral. '
-                    'Publicando, todo mundo do app pode ver e puxar (você continua '
-                    'dono; os outros sugerem). O grupo segue com as cópias dele.',
+          'É a aba Músicas da tela inicial: todas as músicas de quem usa o app. '
+          'As suas entram lá sozinhas (continuam suas; os outros só sugerem). '
+          'Ao tocar ou pôr no repertório uma do acervo, ela vem p/ as suas '
+          'músicas como cópia — dá p/ mudar o tom e as anotações sem mexer na original.',
         ),
-        if (falta.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            icon: const Icon(Icons.publish),
-            label: Text('Publicar ${falta.length} no acervo'),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Publicar no acervo geral?'),
-                  content: Text(
-                    '${falta.length} música(s) ficam visíveis para todos que usam o app.',
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-                    FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Publicar')),
-                  ],
-                ),
-              );
-              if (ok != true) return;
-              for (final s in falta) {
-                a.publicar(s);
-              }
-            },
-          ),
-        ],
       ],
     );
   }
@@ -404,14 +416,14 @@ class _CloudPageState extends State<CloudPage> {
       titulo: 'Só neste aparelho',
       children: [
         Text(
-          '$ns música(s) e $nr repertório(s) ainda não estão no grupo. '
+          '$ns música(s) e $nr repertório(s) ainda não estão na nuvem. '
           'Enviando, você vira o dono deles.',
         ),
         const SizedBox(height: 10),
         FilledButton.icon(
           onPressed: c.enviarBiblioteca,
           icon: const Icon(Icons.upload),
-          label: const Text('Enviar para o grupo'),
+          label: const Text('Enviar p/ a nuvem'),
         ),
       ],
     );

@@ -63,9 +63,17 @@ class _SongViewPageState extends State<SongViewPage>
   bool _scrollDirty = false;
 
   // navegação: setlist (se veio de um repertório) OU toda a biblioteca
-  List<String> get _list =>
-      widget.setlistSongIds ??
-      context.read<AppState>().songs.map((s) => s.id).toList();
+  // (aberta do acervo, sem cópia ainda: só ela)
+  List<String> get _list {
+    if (widget.setlistSongIds != null) return widget.setlistSongIds!;
+    final ids = context.read<AppState>().songs.map((s) => s.id).toList();
+    return ids.contains(_songId) ? ids : [_songId];
+  }
+
+  /// A música mostrada: das minhas, ou a versão do acervo geral.
+  Song? _song() =>
+      context.read<AppState>().songById(_songId) ??
+      context.read<AcervoState>().musicas[_songId];
   int get _idx => _list.indexOf(_songId);
   bool get _hasNav => _list.length > 1;
 
@@ -100,7 +108,7 @@ class _SongViewPageState extends State<SongViewPage>
   void _publishNav() {
     if (!_live.conducting) return;
     final st = context.read<AppState>();
-    final s = st.songById(_songId);
+    final s = _song();
     if (s == null) return;
     final sl = widget.setlistId == null
         ? null
@@ -264,6 +272,7 @@ class _SongViewPageState extends State<SongViewPage>
 
   void _setSpeed(Song base, double delta) {
     final st = context.read<AppState>();
+    if (st.songById(base.id) == null) return; // do acervo: não grava
     base.scrollSpeed = (_speed() + delta).clamp(4.0, 200.0);
     st.upsertSong(base);
   }
@@ -486,17 +495,20 @@ class _SongViewPageState extends State<SongViewPage>
   Widget build(BuildContext context) {
     final st = context.watch<AppState>();
     final live = context.watch<LiveSession>();
-    final base = st.songById(_songId);
+    final acervo = context.watch<AcervoState>();
+    final minhaCopia = st.songById(_songId);
+    final base = minhaCopia ?? acervo.musicas[_songId];
     if (base == null) {
       return const Scaffold(body: Center(child: Text('Música não encontrada')));
     }
+    // aberta direto do acervo geral (ainda sem cópia nas minhas músicas)
+    final doAcervo = minhaCopia == null;
     final steps = _transpose - (_capo ? base.capo : 0);
     final shown = steps == 0 ? base : ChordEngine.transposeSong(base, steps);
     final letra = st.settings.lyricsOnly;
     // só letra: maior, p/ ler de longe cantando
     final fontSize = 18.0 * st.settings.fontScale * (letra ? 1.3 : 1.0);
     // de qual versão do acervo veio (quando a obra tem mais de uma)
-    final acervo = context.watch<AcervoState>();
     final origem = acervo.baseDe(base);
     final versaoAcervo =
         origem != null &&
@@ -531,6 +543,7 @@ class _SongViewPageState extends State<SongViewPage>
                       ),
                     ),
                     Text(
+                      '${doAcervo ? 'acervo geral${base.dono != context.read<CloudState>().eu ? ' · de ${acervo.nomeDe(base.dono)}' : ''}  •  ' : ''}'
                       '${momento != null ? '$momento  •  ' : ''}'
                       '${versaoAcervo != null ? '$versaoAcervo  •  ' : ''}'
                       '${shown.key}'
@@ -618,15 +631,43 @@ class _SongViewPageState extends State<SongViewPage>
                     tooltip: 'Tela cheia',
                     onPressed: _toggleFull,
                   ),
-                  if (context.watch<CloudState>().user != null)
+                  if (doAcervo) ...[
+                    IconButton(
+                      icon: const Icon(Icons.library_add_outlined),
+                      tooltip: 'Adicionar às minhas músicas',
+                      onPressed: () {
+                        final c = acervo.puxar(base);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SongViewPage(
+                              songId: c.id,
+                              setlistId: widget.setlistId,
+                              setlistSongIds: widget.setlistSongIds,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    _menuAcervo(base),
+                  ] else if (context.watch<CloudState>().user != null)
                     _menuNuvem(base),
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: 'Editar',
+                    icon: Icon(
+                      doAcervo && !acervo.podeEditar(base)
+                          ? Icons.rate_review_outlined
+                          : Icons.edit_outlined,
+                    ),
+                    tooltip: doAcervo && !acervo.podeEditar(base)
+                        ? 'Sugerir mudança'
+                        : 'Editar',
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => SongEditPage(songId: base.id),
+                        builder: (_) => SongEditPage(
+                          songId: base.id,
+                          acervo: doAcervo ? base : null,
+                        ),
                       ),
                     ).then((_) => _aplicarPendente()),
                   ),
@@ -857,6 +898,36 @@ class _SongViewPageState extends State<SongViewPage>
     );
   }
 
+  /// Aberta do acervo: versões/detalhes e histórico da versão.
+  Widget _menuAcervo(Song base) {
+    final a = context.read<AcervoState>();
+    final obra = AcervoState.obraDe(base);
+    return PopupMenuButton<String>(
+      tooltip: 'Versões e histórico',
+      icon: const Icon(Icons.layers_outlined),
+      onSelected: (v) {
+        if (v == 'versoes') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ObraPage(obra: obra, versaoId: base.id)),
+          );
+        } else if (v == 'hist') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => VersionsPage(songId: base.id, acervo: true)),
+          );
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'versoes',
+          child: Text(a.versoesDaObra(obra).length > 1 ? 'Ver versões' : 'Versões e detalhes'),
+        ),
+        const PopupMenuItem(value: 'hist', child: Text('Histórico de revisões')),
+      ],
+    );
+  }
+
   /// A versão do acervo de onde esta veio mudou: avisa e deixa atualizar.
   Widget _avisoAcervo(Song base) {
     final a = context.watch<AcervoState>();
@@ -935,6 +1006,7 @@ class _SongViewPageState extends State<SongViewPage>
   }
 
   Widget _toolbar(AppState st, Song base, ColorScheme scheme) {
+    final doAcervo = st.songById(base.id) == null;
     return SafeArea(
       child: Container(
         height: 60,
@@ -958,17 +1030,19 @@ class _SongViewPageState extends State<SongViewPage>
               _tb(Icons.add, 'Tom +', () => _setTranspose(_transpose + 1)),
               _tb(Icons.text_decrease, 'Fonte -', () => _setFont(-0.1)),
               _tb(Icons.text_increase, 'Fonte +', () => _setFont(0.1)),
-              _tb(Icons.south, 'Capo -', () {
-                if (base.capo > 0) {
-                  base.capo--;
+              if (!doAcervo) ...[
+                _tb(Icons.south, 'Capo -', () {
+                  if (base.capo > 0) {
+                    base.capo--;
+                    st.upsertSong(base);
+                  }
+                }),
+                _label('Capo ${base.capo}'),
+                _tb(Icons.north, 'Capo +', () {
+                  base.capo++;
                   st.upsertSong(base);
-                }
-              }),
-              _label('Capo ${base.capo}'),
-              _tb(Icons.north, 'Capo +', () {
-                base.capo++;
-                st.upsertSong(base);
-              }),
+                }),
+              ],
               if (base.capo > 0)
                 IconButton(
                   isSelected: _capo,
@@ -1006,7 +1080,7 @@ class _SongViewPageState extends State<SongViewPage>
                       ? 'Velocidade desta música (toque p/ voltar à padrão)'
                       : 'Velocidade padrão (das configurações)',
                   child: InkWell(
-                    onTap: base.scrollSpeed > 0
+                    onTap: base.scrollSpeed > 0 && !doAcervo
                         ? () {
                             base.scrollSpeed = 0;
                             st.upsertSong(base);

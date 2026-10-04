@@ -176,6 +176,12 @@ class AcervoState extends ChangeNotifier {
 
   List<Song> versoesDaObra(String obra) => obras[obra] ?? const [];
 
+  /// Minha cópia (nas minhas músicas) de qualquer versão da obra, se houver.
+  Song? copiaDaObra(String obra) {
+    final ids = {for (final v in versoesDaObra(obra)) v.id};
+    return app.songs.where((s) => ids.contains(s.baseId)).firstOrNull;
+  }
+
   static String rotulo(Song s) =>
       s.nomeVersao.isNotEmpty ? s.nomeVersao : 'Original';
 

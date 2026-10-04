@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/chord_engine.dart';
 import '../cloud/acervo.dart';
-import '../cloud/acervo_page.dart';
+import '../cloud/acervo_page.dart' show ObraPage;
 import '../cloud/cloud_page.dart';
 import '../cloud/cloud_state.dart';
 import '../cloud/suggestions_page.dart';
@@ -12,7 +12,9 @@ import '../data/store.dart';
 import '../live/live_page.dart';
 import '../live/live_session.dart';
 import '../models/song.dart';
+import 'minhas_page.dart';
 import 'song_view_page.dart';
+import 'widgets/song_tile.dart';
 import 'song_edit_page.dart';
 import 'setlist_page.dart';
 import 'settings_page.dart';
@@ -119,6 +121,14 @@ class _LibraryPageState extends State<LibraryPage>
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    // se a leitura do acervo tinha sido negada, tenta de novo ao abrir
+    final a = context.read<AcervoState>();
+    if (a.erro != null || !a.carregou) a.religar();
+  }
+
+  @override
   void dispose() {
     _tab.dispose();
     super.dispose();
@@ -171,7 +181,7 @@ class _LibraryPageState extends State<LibraryPage>
             child: TextField(
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
-                hintText: 'Buscar...',
+                hintText: 'Buscar no acervo ou nos repertórios...',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 border: OutlineInputBorder(
@@ -185,7 +195,7 @@ class _LibraryPageState extends State<LibraryPage>
           Expanded(
             child: TabBarView(
               controller: _tab,
-              children: [_songsTab(st), _setlistsTab(st)],
+              children: [_acervoTab(st), _setlistsTab(st)],
             ),
           ),
         ],
@@ -201,154 +211,115 @@ class _LibraryPageState extends State<LibraryPage>
     );
   }
 
-  Widget _songsTab(AppState st) {
-    final list = SongSearch.run(st.songs, _query);
-    if (list.isEmpty) return _empty('Nenhuma música', Icons.library_music);
-    final uso = UsoMusicas.calcula(st.setlists);
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _songCard(
-        st,
-        list[i].song,
-        trecho: list[i].snippet,
-        uso: uso[list[i].song.id],
-      ),
-    );
-  }
-
-  Widget _songCard(AppState st, Song s, {String? trecho, SongUse? uso}) {
-    final scheme = Theme.of(context).colorScheme;
+  /// Aba Músicas = acervo geral: uma linha por obra (a versão principal).
+  /// Tocar abre a MINHA cópia (tom, anotações, repertórios); sem cópia, a do acervo.
+  Widget _acervoTab(AppState st) {
+    final a = context.watch<AcervoState>();
     final cloud = context.watch<CloudState>();
-    final meta = <String>[
-      // no grupo: de quem é (as minhas não precisam dizer)
-      if (cloud.ativa && s.dono.isNotEmpty && s.dono != cloud.eu)
-        'de ${cloud.nomeDe(s.dono)}',
-      if (s.artist.isNotEmpty) s.artist,
-      if (s.bpm > 0) '${s.bpm} BPM',
-      // pelos repertórios com data já passada
-      if (uso != null)
-        'tocada ${UsoMusicas.quando(uso.ultima)} (${uso.vezes}x)',
-    ].join('  •  ');
-    return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-        title: Text(
-          s.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
-        subtitle: (meta.isEmpty && s.tags.isEmpty && trecho == null)
-            ? null
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // achou pela letra: mostra o trecho
-                  if (trecho != null)
-                    Text(
-                      '“$trecho”',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.primary,
-                        fontStyle: FontStyle.italic,
+    final scheme = Theme.of(context).colorScheme;
+    if (!a.ligado) {
+      return _empty('Entre com o Google (ícone de pessoas lá em cima)', Icons.public);
+    }
+    final obras = a.obras;
+    final obraDaPrincipal = {for (final e in obras.entries) e.value.first.id: e.key};
+    final hits = SongSearch.run(obras.values.map((l) => l.first), _query);
+    if (_query.trim().isEmpty) {
+      hits.sort((x, y) => SongSearch.fold(x.song.title).compareTo(SongSearch.fold(y.song.title)));
+    }
+    final uso = UsoMusicas.calcula(st.setlists);
+    return Column(
+      children: [
+        if (!a.carregou) const LinearProgressIndicator(),
+        if (a.erro != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(child: Text(a.erro!, style: TextStyle(color: scheme.error))),
+                TextButton(onPressed: a.religar, child: const Text('Tentar de novo')),
+              ],
+            ),
+          ),
+        Expanded(
+          child: hits.isEmpty
+              ? _empty(a.carregou ? (_query.isEmpty ? 'Nenhuma música no acervo' : 'Nada encontrado') : 'Carregando...',
+                  Icons.library_music)
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
+                  itemCount: hits.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final v = hits[i].song;
+                    final obra = obraDaPrincipal[v.id]!;
+                    final n = obras[obra]!.length;
+                    final copia = a.copiaDaObra(obra);
+                    final u = copia == null ? null : uso[copia.id];
+                    return SongTile(
+                      title: v.title,
+                      keyLabel: v.key,
+                      trecho: hits[i].snippet,
+                      tags: v.tags,
+                      meta: [
+                        if (v.artist.isNotEmpty) v.artist,
+                        if (v.dono.isNotEmpty && v.dono != cloud.eu) 'de ${a.nomeDe(v.dono)}',
+                        if (n > 1) '$n versões',
+                        if (u != null) 'tocada ${UsoMusicas.quando(u.ultima)} (${u.vezes}x)',
+                      ].join('  •  '),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => SongViewPage(songId: copia?.id ?? v.id)),
                       ),
-                    ),
-                  if (meta.isNotEmpty)
-                    Text(
-                      meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                    ),
-                  if (s.tags.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: s.tags
-                            .take(4)
-                            .map(
-                              (t) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  t,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: scheme.onSurfaceVariant,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (copia != null)
+                            Tooltip(
+                              message: 'Está nas suas músicas',
+                              child: Icon(Icons.library_add_check, color: scheme.primary),
+                            ),
+                          PopupMenuButton<String>(
+                            onSelected: (op) {
+                              if (op == 'add') {
+                                final c = a.puxar(v);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('"${c.title}" está nas suas músicas')),
+                                );
+                              } else if (op == 'versoes') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ObraPage(obra: obra)),
+                                );
+                              } else if (op == 'edit') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SongEditPage(songId: v.id, acervo: v),
                                   ),
-                                ),
+                                );
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              if (copia == null)
+                                const PopupMenuItem(value: 'add', child: Text('Adicionar às minhas músicas')),
+                              PopupMenuItem(
+                                value: 'versoes',
+                                child: Text(n > 1 ? 'Ver versões' : 'Versões e detalhes'),
                               ),
-                            )
-                            .toList(),
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text(a.podeEditar(v)
+                                    ? 'Editar (${AcervoState.rotulo(v)})'
+                                    : 'Sugerir mudança'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                ],
-              ),
-        leading: Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [scheme.primary, scheme.tertiary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            s.key,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-            ),
-          ),
+                    );
+                  },
+                ),
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (v) {
-            if (v == 'edit') {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => SongEditPage(songId: s.id)),
-              );
-            } else if (v == 'dup') {
-              st.duplicateSong(s);
-            } else if (v == 'del') {
-              _confirmDelete(
-                'Excluir "${s.title}"?',
-                () => st.deleteSong(s.id),
-              );
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'edit',
-              child: Text(cloud.podeEditarSong(s) ? 'Editar' : 'Sugerir mudança'),
-            ),
-            const PopupMenuItem(value: 'dup', child: Text('Duplicar')),
-            // no grupo só o dono apaga
-            if (cloud.souDono(s.dono))
-              const PopupMenuItem(value: 'del', child: Text('Excluir')),
-          ],
-        ),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => SongViewPage(songId: s.id)),
-        ),
-      ),
+      ],
     );
   }
 
@@ -550,13 +521,13 @@ class _CloudButtons extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (c.user != null)
+        if (c.ativa)
           IconButton(
-            tooltip: 'Acervo geral',
-            icon: const Icon(Icons.public),
+            tooltip: 'Minhas músicas',
+            icon: const Icon(Icons.library_music_outlined),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const AcervoPage()),
+              MaterialPageRoute(builder: (_) => const MinhasMusicasPage()),
             ),
           ),
         if (c.user != null)
@@ -573,8 +544,8 @@ class _CloudButtons extends StatelessWidget {
             ),
           ),
         IconButton(
-          tooltip: c.ativa ? 'Grupo: ${c.grupo!.nome}' : 'Grupo compartilhado',
-          icon: Icon(c.ativa ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
+          tooltip: 'Conta e compartilhamento',
+          icon: Icon(c.ativa ? Icons.group_outlined : Icons.cloud_off_outlined),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CloudPage()),

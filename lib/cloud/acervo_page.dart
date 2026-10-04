@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../core/search.dart';
 import '../data/store.dart';
 import '../models/song.dart';
 import '../ui/song_edit_page.dart';
@@ -10,115 +9,6 @@ import 'acervo.dart';
 import 'cloud_state.dart';
 import 'permissions_sheet.dart';
 import 'versions_page.dart';
-
-/// Acervo geral: todas as músicas (obras) de quem usa o app, com as versões.
-class AcervoPage extends StatefulWidget {
-  const AcervoPage({super.key});
-  @override
-  State<AcervoPage> createState() => _AcervoPageState();
-}
-
-class _AcervoPageState extends State<AcervoPage> {
-  String _q = '';
-
-  @override
-  void initState() {
-    super.initState();
-    // se a leitura tinha sido negada antes, tenta de novo ao abrir
-    final a = context.read<AcervoState>();
-    if (a.erro != null || !a.carregou) a.religar();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final a = context.watch<AcervoState>();
-    final st = context.watch<AppState>();
-    final scheme = Theme.of(context).colorScheme;
-    final obras = a.obras;
-    // busca na versão principal de cada obra (título, artista, letra)
-    final principais = {for (final e in obras.entries) e.value.first.id: e.key};
-    final hits = SongSearch.run(
-      obras.values.map((l) => l.first),
-      _q,
-    );
-    if (_q.trim().isEmpty) {
-      hits.sort((x, y) => SongSearch.fold(x.song.title).compareTo(SongSearch.fold(y.song.title)));
-    }
-    final naBiblioteca = {for (final s in st.songs) s.baseId};
-    return Scaffold(
-      appBar: AppBar(title: const Text('Acervo geral')),
-      body: !a.ligado
-          ? const Center(child: Text('Entre com o Google (☁ na tela inicial) p/ ver o acervo.'))
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: TextField(
-                    onChanged: (v) => setState(() => _q = v),
-                    decoration: const InputDecoration(
-                      hintText: 'Buscar no acervo (nome, artista ou trecho da letra)...',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                  ),
-                ),
-                if (!a.carregou) const LinearProgressIndicator(),
-                if (a.erro != null)
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(a.erro!, style: TextStyle(color: scheme.error))),
-                        TextButton(onPressed: a.religar, child: const Text('Tentar de novo')),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: hits.isEmpty
-                      ? Center(
-                          child: Text(
-                            a.carregou ? 'Nada encontrado' : 'Carregando...',
-                            style: TextStyle(color: Theme.of(context).disabledColor),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                          itemCount: hits.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (_, i) {
-                            final s = hits[i].song;
-                            final obra = principais[s.id]!;
-                            final vs = obras[obra]!;
-                            final tem = vs.any((v) => naBiblioteca.contains(v.id));
-                            return Card(
-                              child: ListTile(
-                                leading: CircleAvatar(child: Text(s.key)),
-                                title: Text(s.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                subtitle: Text([
-                                  if (s.artist.isNotEmpty) s.artist,
-                                  'de ${a.nomeDe(s.dono)}',
-                                  vs.length == 1 ? '1 versão' : '${vs.length} versões',
-                                  if (hits[i].snippet != null) '“${hits[i].snippet}”',
-                                ].join('  •  '), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                trailing: tem
-                                    ? Tooltip(
-                                        message: 'Já está na sua biblioteca',
-                                        child: Icon(Icons.library_add_check, color: scheme.primary),
-                                      )
-                                    : const Icon(Icons.chevron_right),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => ObraPage(obra: obra)),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-    );
-  }
-}
 
 /// Uma música do acervo e suas versões (arranjos).
 class ObraPage extends StatefulWidget {
