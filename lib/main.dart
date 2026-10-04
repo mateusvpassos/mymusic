@@ -20,8 +20,9 @@ void main() {
   final acervo = AcervoState(cloud, state);
   // com o grupo da nuvem ligado é ele que sincroniza; o Drive vira só backup
   // (dois caminhos mesclando a mesma música davam versão misturada)
+  // só Firebase: com ele configurado o Drive não sincroniza mais
   state.onPersist = () {
-    if (!state.cloudAtiva && !CloudConfig.emulador) sync.scheduleAuto(state);
+    if (!CloudConfig.ligado && !CloudConfig.emulador) sync.scheduleAuto(state);
   };
   runApp(
     MyApp(state: state, sync: sync, live: live, cloud: cloud, acervo: acervo),
@@ -36,7 +37,7 @@ Future<void> _boot(AppState state, SyncState sync, CloudState cloud) async {
   await CloudConfig.init();
   await cloud.init();
   // build de teste (emulador do Firebase) nunca encosta no Drive de verdade
-  if (cloud.vaiUsarGrupo || CloudConfig.emulador) return;
+  if (CloudConfig.ligado || CloudConfig.emulador) return;
   await sync.trySilent();
   if (sync.signedIn) await sync.sync(state);
 }

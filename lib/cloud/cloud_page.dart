@@ -56,8 +56,9 @@ class _CloudPageState extends State<CloudPage> {
               _pessoas(context, c),
               _confianca(context, c),
               _envio(context, c),
-              _acervo(context),
             ],
+            // acervo geral não depende de grupo
+            _acervo(context),
           ],
           if (c.erro != null)
             Padding(

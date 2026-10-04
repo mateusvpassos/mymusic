@@ -296,6 +296,13 @@ class CloudState extends ChangeNotifier {
           (q) {
             grupos = q.docs.map(Grupo.fromDoc).toList()
               ..sort((a, b) => a.nome.compareTo(b.nome));
+            // sem grupo nenhum (confirmado pelo servidor): cria a biblioteca
+            // pessoal na nuvem — tudo fica no Firebase sem precisar apertar nada
+            if (grupos.isEmpty && !q.metadata.isFromCache && !_criando) {
+              _criando = true;
+              criarGrupo('Biblioteca de $nome').whenComplete(() => _criando = false);
+              return;
+            }
             final atual = grupo == null
                 ? null
                 : grupos.where((x) => x.id == grupo!.id).firstOrNull;
@@ -320,6 +327,8 @@ class CloudState extends ChangeNotifier {
           },
         );
   }
+
+  bool _criando = false;
 
   Future<void> criarGrupo(String nomeGrupo) async {
     final ref = _db.collection('grupos').doc();
@@ -714,6 +723,8 @@ class CloudState extends ChangeNotifier {
     if (!carregou) {
       carregou = true;
       erro = null;
+      // grupo meu: o que só existe neste aparelho sobe sozinho
+      if (souDonoDoGrupo && songsSoAqui + setsSoAqui > 0) enviarBiblioteca();
       notifyListeners();
     }
   }

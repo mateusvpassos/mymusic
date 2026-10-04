@@ -45,6 +45,7 @@ class AcervoState extends ChangeNotifier {
   // ---------------- liga/desliga com o login ----------------
 
   void _userMudou() {
+    if (cloud.carregou) _publicarSozinho();
     if (eu == _quem) return;
     _quem = eu;
     for (final s in _subs) {
@@ -74,6 +75,7 @@ class AcervoState extends ChangeNotifier {
       carregou = true;
       erro = null;
       _tentativas = 0;
+      _publicarSozinho();
       notifyListeners();
     }, onError: _onErro));
     _subs.add(_db.collection('confianca').snapshots().listen((q) {
@@ -267,6 +269,20 @@ class AcervoState extends ChangeNotifier {
       ..versao = 0;
     salvar(v, acao: 'criou a versão "$nomeVersao" a partir de "${rotulo(base)}"');
     return musicas[v.id]!;
+  }
+
+  // as minhas músicas vão sozinhas p/ o acervo geral (depois que a
+  // biblioteca já chegou da nuvem, p/ não publicar antes de saber o que há)
+  bool _publicando = false;
+  void _publicarSozinho() {
+    if (_publicando || !carregou || !cloud.carregou) return;
+    final falta = naoPublicadas;
+    if (falta.isEmpty) return;
+    _publicando = true;
+    for (final s in falta) {
+      publicar(s);
+    }
+    _publicando = false;
   }
 
   /// Músicas da biblioteca que ainda não estão no acervo (as minhas).

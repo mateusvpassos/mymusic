@@ -1,3 +1,4 @@
+import '../cloud/cloud_config.dart';
 import '../cloud/cloud_page.dart';
 import '../cloud/cloud_state.dart';
 import 'package:flutter/material.dart';
@@ -156,7 +157,8 @@ class SettingsPage extends StatelessWidget {
               );
             }),
           ]),
-          _card('Google Drive', [_drive(context, st)]),
+          // só Firebase: Drive aparece só se a nuvem não estiver configurada
+          if (!CloudConfig.ligado) _card('Google Drive', [_drive(context, st)]),
           const SizedBox(height: 16),
           Center(
             child: Text('MyMusic', style: TextStyle(color: Theme.of(context).hintColor)),
