@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/diff.dart';
@@ -134,7 +134,7 @@ DateTime? dataFirestore(dynamic v) {
 /// nuvem (com versão e autor) e o que chega de lá p/ cá. Quem não pode
 /// editar uma música manda sugestão — as regras do servidor
 /// (firebase/firestore.rules) garantem isso mesmo se o app errar.
-class CloudState extends ChangeNotifier {
+class CloudState extends ChangeNotifier with WidgetsBindingObserver {
   final AppState app;
   CloudState(this.app);
 
@@ -191,6 +191,7 @@ class CloudState extends ChangeNotifier {
     app.localSetlistHooks.add(_onLocalSetlist);
     app.localDeleteHooks.add(_onLocalDelete);
     if (!disponivel) return;
+    WidgetsBinding.instance.addObserver(this);
     _grupoSalvo = await _lePrefs();
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) {
       user = u;
@@ -848,8 +849,25 @@ class CloudState extends ChangeNotifier {
     app.touch();
   }
 
+  // Com a tela apagada/app em segundo plano o Android corta a rede; ao voltar,
+  // o Firestore só reconecta depois de uma espera crescente (até ~1 min) e o
+  // que mudaram no web demora a aparecer. Volta p/ frente = reconecta já.
+  DateTime? _foiProFundo;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.paused) _foiProFundo = DateTime.now();
+    if (s != AppLifecycleState.resumed || user == null) return;
+    final fora = _foiProFundo == null ? null : DateTime.now().difference(_foiProFundo!);
+    _foiProFundo = null;
+    // só se ficou mesmo em segundo plano (não p/ puxar a barra de notificação)
+    if (fora == null || fora < const Duration(seconds: 10)) return;
+    _db.disableNetwork().then((_) => _db.enableNetwork()).catchError((_) {});
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSub?.cancel();
     _gruposSub?.cancel();
     _pararGrupo();
